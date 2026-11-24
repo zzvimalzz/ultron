@@ -6,8 +6,8 @@ A small Windows launcher for Claude and ChatGPT desktop accounts, with a local u
 - **Plans:** each signed-in account shows its plan (Pro, Plus, Free…) as a badge, read from that account's own CLI without a model call and refreshed every six hours. If the plan can't be detected the badge asks you. Free accounts are left out of the crew.
 - **Model and roles:** each account can pick a model and effort from its own CLI's live list, the kinds of work it does (code, UI/UX, QA, testing, research, review, images, SVG), whether it is in the crew and how many headless runs it carries. The terminal opens with the chosen model and effort; the hub's `crew` tool reports them to every agent.
 - **Usage:** tokens, token mix, top model, active time, sessions, tokens over time, a Week / Month / Year activity heatmap, models, accounts and projects. Filter by account and by 24H, 7D, 30D, 90D or All.
-- **Crew:** a live flowchart of you, the leader, every agent, their sessions and subagents, who is working, and who is messaging whom. **Connect agents** gives Claude Code and Codex the Ultron Hub (shared memory and messages) and the `kiss` and `repo-structure` skills; **Disconnect** removes them.
-- **Memory:** one vault of plain Markdown per device (`~/.ultron/memory` by default, or any folder you choose, including an existing vault). Agents read it at the start of a task and record outcomes, decisions and facts in separate places; facts about you wait under **To confirm** or in the **Inbox** until you review them on the Crew page's Memory tab. **Keep memory tidy** lets a chosen account write sessions up after they end and review the vault weekly.
+- **Ultron:** give a task to the leader you chose. The leader works headlessly and, only when it needs to, builds teams with leads and members on your other paid accounts. Everyone runs behind a guard that only lets reversible actions through (no `git push`, no deletes outside the folder, no global installs); questions climb member → lead → leader → you and appear as an approval card and a Windows notification. A live chart shows the teams, delegations, reports, questions and memory use; the timeline logs every step. When a task finishes you see what changed and can **Undo all** (the folder is restored from a shadow Git checkpoint, so Git must be installed) or **Continue in terminal**. **Connect agents** gives Claude Code and Codex the Ultron Hub (shared memory and messages) and the `kiss` and `repo-structure` skills; **Disconnect** removes them.
+- **Memory:** one vault of plain Markdown per device (`~/.ultron/memory` by default, or any folder you choose, including an existing vault). Agents read it at the start of a task and record outcomes, decisions and facts in separate places; facts about you wait under **To confirm** or in the **Inbox** until you review them on the Ultron page's Memory tab. **Keep memory tidy** lets a chosen account write sessions up after they end and review the vault weekly.
 - **Settings:** name, theme, minimize after opening, memory folder and tidying.
 
 Usage covers Claude Code and Codex sessions stored on this PC. Chat conversations aren't stored locally, so they aren't counted.
@@ -46,7 +46,7 @@ npm run package        # build dist/Ultron-Setup-<version>.exe
 | --- | --- |
 | `src/main/` | App lifecycle, IPC, config, profile detection, "Open with" targets, plan detection scheduler |
 | `src/main/usage/` | Incremental transcript scanning, parsing, attribution and aggregation |
-| `src/hub/` | Ultron Hub MCP server, the shared CLI table (`cli.js`), the memory vault (`memory.js`, `vault/` skeleton) and the skills shipped to every agent |
+| `src/hub/` | Ultron Hub MCP server, the shared CLI table (`cli.js`), the memory vault (`memory.js`, `vault/` skeleton), task records, checkpoint, guard and run processes, and the skills shipped to every agent |
 | `src/renderer/` | Vanilla ES-module UI: `lib/` shared helpers, `pages/` one module per page |
 | `test/` | `node:test` suites with synthetic fixtures |
 | `tools/` | Icon generator, personal-details check, screenshot driver |
@@ -64,5 +64,7 @@ Connecting registers `ultron-hub` in `~/.claude.json` and `~/.codex/config.toml`
 | `recall` / `remember` | Search the vault; save a note of a given kind (fact, profile, area, project-state, decision, session, inbox) |
 | `update` / `forget` | Replace a stale note or archive it; the old version is always kept |
 | `send_message` / `check_inbox` | Message an agent by name, `leader` or `everyone`, and read replies |
+
+Inside a task started from Ultron the hub also offers `create_team`, `delegate`, `wait`, `answer`, `ask_up` and `runs`, depending on the agent's role. Sessions you start yourself get the memory and messaging tools only.
 
 Claude is set up for code and SVG, and ChatGPT for code, images and GIFs. The hub tells every agent to send work to whichever one fits.

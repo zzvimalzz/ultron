@@ -1,7 +1,7 @@
 'use strict';
 const os = require('os');
 const path = require('path');
-const { app, BrowserWindow, ipcMain, nativeTheme, shell, dialog } = require('electron');
+const { app, BrowserWindow, Notification, ipcMain, nativeTheme, shell, dialog } = require('electron');
 const { createStore, blankAccount } = require('./config');
 const { resolveDataDir, isRunning, profileReady, lastActivityAt } = require('./profiles');
 const { installs, availableTargets, openAccount, signIn } = require('./targets');
@@ -14,6 +14,9 @@ const { ROLES } = require('../hub/roles');
 const memory = require('../hub/memory');
 const { MEMORY_DIR, recentEvents } = require('../hub/files');
 const { createCurator } = require('./curator');
+const { createTasks } = require('./tasks');
+const checkpoint = require('../hub/checkpoint');
+const hubTasks = require('../hub/tasks');
 
 const LIVE_INTERVAL_MS = 4000;
 const MICA = process.platform === 'win32' && Number(os.release().split('.')[2]) >= 22000;
@@ -29,6 +32,7 @@ let store;
 let usage;
 let detection;
 let curator;
+let tasks;
 
 const vaultDir = () => store.get().memory.dir || MEMORY_DIR;
 const usageAccounts = () => store.get().accounts.map(a => ({ ...a, realDataDir: resolveDataDir(a.dataDir) }));
@@ -96,13 +100,24 @@ function startLiveUpdates() {
     detection.watchSignIn(accounts);
     const changed = await usage.refresh(accounts);
     const view = await overview();
-    if (store.get().crew.connected) crew.publish(store.get(), view, usage.sessions(accounts));
-    const status = `${Object.values(view).map(o => `${o.running}${o.working}${o.tier}${o.detecting}`).join()}|${crew.eventsSize()}`;
+    if (store.get().crew.connected || tasks.active()) crew.publish(store.get(), view, usage.sessions(accounts));
+    const status = `${Object.values(view).map(o => `${o.running}${o.working}${o.tier}${o.detecting}`).join()}|${crew.eventsSize()}|${tasks.poll()}`;
     if ((changed || status !== lastStatus) && win && !win.isDestroyed()) win.webContents.send('live');
     lastStatus = status;
     setTimeout(tick, LIVE_INTERVAL_MS);
   };
   tick();
+}
+
+function askedByTask(question, task) {
+  const note = new Notification({ title: 'Ultron needs you', body: `${task.title}: ${question.text}`.slice(0, 200) });
+  note.on('click', () => {
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.focus();
+    win.webContents.send('goto', 'ultron');
+  });
+  note.show();
 }
 
 function registerIpc() {
@@ -132,7 +147,7 @@ function registerIpc() {
     if (store.get().closeOnLaunch) setTimeout(() => win.minimize(), 400);
     return used;
   });
-  ipcMain.handle('crew:map', async () => crew.crewMap(store.get(), await overview(), usage.sessions(usageAccounts())));
+  ipcMain.handle('crew:map', async () => ({ ...crew.crewMap(store.get(), await overview(), usage.sessions(usageAccounts())), runs: hubTasks.runningRunsByAccount() }));
   ipcMain.handle('crew:connect', (_e, connected) => {
     connectAgents(store.get().accounts, connected, vaultDir());
     return store.update({ crew: { ...store.get().crew, connected } });
@@ -150,12 +165,14 @@ function registerIpc() {
   ipcMain.handle('memory:keep', (_e, item, section) => memory.keep(vaultDir(), item, section));
   ipcMain.handle('memory:drop', (_e, item) => memory.drop(vaultDir(), item));
   ipcMain.handle('memory:recent', () => recentEvents(Date.now() - 7 * 24 * 3600 * 1000).filter(e => e.type === 'memory').slice(-40).reverse());
+  for (const name of ['start', 'stop', 'list', 'get', 'undo', 'terminal']) ipcMain.handle(`tasks:${name}`, (_e, ...args) => tasks[name](...args));
+  ipcMain.handle('tasks:answer', (_e, ...args) => tasks.answerUser(...args));
   ipcMain.handle('usage:query', (_e, options) => usage.query(usageAccounts(), options));
   ipcMain.handle('dialog:pickFolder', async () => {
     const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0];
   });
-  ipcMain.handle('app:info', () => ({ version: app.getVersion(), userData: app.getPath('userData'), roles: ROLES, sections: memory.MEMORY_SECTIONS }));
+  ipcMain.handle('app:info', () => ({ version: app.getVersion(), userData: app.getPath('userData'), roles: ROLES, sections: memory.MEMORY_SECTIONS, git: checkpoint.available() }));
   ipcMain.handle('app:openPath', (_e, p) => shell.openPath(p));
 }
 
@@ -182,6 +199,12 @@ app.whenReady().then(async () => {
     onChange: () => { if (win && !win.isDestroyed()) win.webContents.send('live'); },
   });
   curator.start();
+  tasks = createTasks({
+    store, isEligible: a => crew.eligible(a, detection.tierOf(a)),
+    publishCrew: async () => crew.publish(store.get(), await overview(), usage.sessions(usageAccounts())),
+    onQuestion: askedByTask,
+  });
+  tasks.sweep();
   registerIpc();
   createWindow();
   win.once('ready-to-show', detection.start);

@@ -2,18 +2,15 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { HUB_DIR, writeJson } = require('../hub/files');
+const { NODE_LAUNCHER, unpacked, writeJson } = require('../hub/files');
 const { CLIS } = require('../hub/cli');
 const { resolveDataDir } = require('./profiles');
 
 const NAME = 'ultron-hub';
-// The server runs outside Electron (Node mode), which can't read inside app.asar.
-const unpacked = file => file.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
 const SERVER = unpacked(path.join(__dirname, '..', 'hub', 'server.js'));
 const CONTEXT_HOOK = unpacked(path.join(__dirname, '..', 'hub', 'context-hook.js'));
 const SKILLS = path.join(__dirname, '..', 'hub', 'skills');
 const MARKER = '<!-- Installed by Ultron -->';
-const NODE_LAUNCHER = path.join(HUB_DIR, 'bin', 'ultron-node.cmd');
 const BLOCK = /\n?<!-- Ultron memory -->[\s\S]*?<!-- \/Ultron memory -->\r?\n?/;
 
 const serverEntry = provider => ({ command: process.execPath, args: [SERVER], env: { ELECTRON_RUN_AS_NODE: '1', ULTRON_PROVIDER: provider } });
@@ -148,4 +145,4 @@ function connectAgents(accounts, connected, vault) {
   });
 }
 
-module.exports = { connectAgents, withoutHubTables, setMemoryBlock, setContextHook };
+module.exports = { connectAgents, writeNodeLauncher, withoutHubTables, setMemoryBlock, setContextHook };

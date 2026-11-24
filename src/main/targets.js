@@ -44,8 +44,8 @@ function detached(cmd, args, options = {}) {
 }
 
 // `start` gives the CLI its own console window with real stdio; a detached spawn would hand it NUL handles.
-function inTerminal(title, exe, args, env) {
-  const line = `"start "${title.replace(/"/g, '')}" /D "${os.homedir()}" "${exe}"${args.map(a => ` ${a}`).join('')}"`;
+function inTerminal(title, exe, args, env, cwd = os.homedir()) {
+  const line = `"start "${title.replace(/"/g, '')}" /D "${cwd}" "${exe}"${args.map(a => ` ${a}`).join('')}"`;
   return detached('cmd.exe', ['/d', '/s', '/c', line], { env, windowsHide: true, windowsVerbatimArguments: true });
 }
 
@@ -125,4 +125,4 @@ function installs() {
   }]));
 }
 
-module.exports = { PROVIDERS, isInstalled, installs, availableTargets, openAccount, signIn };
+module.exports = { PROVIDERS, inTerminal, isInstalled, installs, availableTargets, openAccount, signIn };

@@ -20,7 +20,7 @@ const eligible = (account, detected) => account.inCrew !== false && ['paid', 'te
 const standing = live => ({ tier: live?.tier, eligible: Boolean(live?.eligible) });
 const agentOf = (a, overview) => ({
   id: a.id, name: a.name, provider: a.provider, ...standing(overview[a.id]),
-  model: a.model, effort: a.effort, roles: a.roles, maxRuns: a.maxRuns, status: statusOf(overview[a.id]),
+  model: a.model, effort: a.effort, roles: a.roles, maxRuns: a.maxRuns, tokens24h: overview[a.id]?.tokens || 0, status: statusOf(overview[a.id]),
 });
 
 const statusOf = live => (live?.working ? 'working' : live?.running ? 'open' : 'idle');
@@ -65,4 +65,4 @@ function crewMap(config, overview, sessions) {
   };
 }
 
-module.exports = { publish, eventsSize, crewMap, effectiveTier, eligible };
+module.exports = { publish, eventsSize, crewMap, leaderId, effectiveTier, eligible };

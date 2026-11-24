@@ -6,7 +6,7 @@ const { PROVIDERS, isInstalled } = require('./targets');
 const { HUB_DIR } = require('../hub/files');
 const { DEFAULT_ROLES } = require('../hub/roles');
 
-const VERSION = 7;
+const VERSION = 8;
 const HOMES_DIR = path.join(HUB_DIR, 'homes');
 
 function defaultClaudeDataDir() {
@@ -102,6 +102,7 @@ function migrate(config) {
   config.crew ||= { connected: false, leader: null };
   config.memory ||= { dir: config.crew.memoryDir || '', tidy: false, curator: { account: '', model: '' } };
   delete config.crew.memoryDir;
+  config.ultron ||= { lastFolder: '' };
   if (!config.accounts.some(a => a.provider === 'chatgpt') && isInstalled('chatgpt')) {
     config.accounts.push(account('chatgpt', 0, { dataDir: chatgptDataDir() }));
   }

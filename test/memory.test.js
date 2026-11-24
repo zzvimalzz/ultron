@@ -18,7 +18,7 @@ const dir = name => fs.mkdtempSync(path.join(TEMP, `${name}-`));
 const newVault = () => { const vault = dir('vault'); memory.ensureVault(vault); return vault; };
 const read = (vault, file) => fs.readFileSync(path.join(vault, file), 'utf8');
 const exists = (vault, file) => fs.existsSync(path.join(vault, file));
-const today = new Date().toISOString().slice(0, 10);
+const today = new Date().toLocaleDateString('sv-SE');
 const SKELETON_FILES = ['START_HERE.md', 'MEMORY.md', 'INDEX.md', 'PROTOCOL.md', 'AGENTS.md', 'CLAUDE.md', 'profile/identity.md', 'profile/goals.md', 'areas/_index.md',
   'projects/_index.md', 'projects/_template/state.md', 'sessions/README.md', 'inbox/README.md', 'archive/README.md'];
 

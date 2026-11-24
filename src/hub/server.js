@@ -5,9 +5,14 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const memory = require('./memory');
+const { crewLine } = require('./prompts');
+const { object, text } = require('./schema');
+const tasks = require('./tasks');
+const { TASK_TOOLS } = require('./team-tools');
 const { HUB_DIR, MEMORY_DIR, CREW_FILE, SESSIONS_FILE, readJson, writeJson, appendEvent, recentEvents } = require('./files');
 
 const PROVIDER = process.env.ULTRON_PROVIDER || 'claude';
+const { ULTRON_TASK: TASK, ULTRON_RUN: RUN, ULTRON_AGENT: AGENT, ULTRON_ROLE: ROLE } = process.env;
 const PROVIDER_NAMES = { claude: 'Claude', chatgpt: 'ChatGPT' };
 const WEEK_MS = 7 * 24 * 3600 * 1000;
 const INBOX_DIR = path.join(HUB_DIR, 'inbox');
@@ -22,7 +27,8 @@ function whoAmI() {
     .filter(s => s.provider === PROVIDER && s.cwd && norm(s.cwd) === cwd)
     .sort((a, b) => b.last - a.last)[0];
   const mine = crew.agents.filter(a => a.provider === PROVIDER);
-  const id = session ? session.agent : mine.length === 1 ? mine[0].id : null;
+  const taskAccount = RUN && tasks.agentsOf(TASK).find(a => a.id === AGENT)?.account;
+  const id = taskAccount || (session ? session.agent : mine.length === 1 ? mine[0].id : null);
   return { crew, me: crew.agents.find(a => a.id === id) || null, mine };
 }
 
@@ -39,13 +45,16 @@ function crewTool() {
   const { crew, me } = whoAmI();
   const lines = crew.agents.map(a => {
     const flags = `${a.id === crew.leader ? ' (leader)' : ''}${me && a.id === me.id ? ' (you)' : ''}${a.eligible ? '' : ` (not in crew: ${notInCrew(a)})`}`;
-    return `- ${a.name}${flags}: ${a.tier} · ${a.model || 'default'}${a.effort ? `/${a.effort}` : ''} · roles: ${a.roles.join(', ')} · ${a.status}`;
+    return crewLine(a, flags);
   });
   return lines.join('\n') || 'No agents yet. Open Ultron to set up the crew.';
 }
 
 // Every memory tool leaves one event with a title only, never note text, so Ultron can show what the crew is doing.
-const memoryEvent = (action, title) => appendEvent({ type: 'memory', action, title, from: sender() });
+function memoryEvent(action, title) {
+  appendEvent({ type: 'memory', action, title, from: sender(), ...(RUN ? { task: TASK, taskAgent: AGENT } : {}) });
+  if (RUN) tasks.logEvent(TASK, { type: 'memory', action, title, agent: AGENT });
+}
 
 const source = () => {
   const { me } = whoAmI();
@@ -114,9 +123,6 @@ function checkInbox() {
     : 'No new messages.';
 }
 
-const object = (properties = {}, required = []) => ({ type: 'object', properties, required });
-const text = description => ({ type: 'string', description });
-
 const TOOLS = [
   { name: 'crew', run: crewTool, inputSchema: object(),
     description: 'List the AI agents on this PC: the leader, what each one does, and who is working right now.' },
@@ -140,6 +146,9 @@ const TOOLS = [
     description: 'Read the messages other agents sent you since you last checked.' },
 ];
 
+// Task tools exist only inside a task run, and each role sees its own.
+const visibleTools = () => [...TOOLS, ...TASK_TOOLS.filter(t => RUN && t.roles.includes(ROLE))];
+
 function instructions() {
   const { crew } = whoAmI();
   const leader = crew.agents.find(a => a.id === crew.leader);
@@ -152,18 +161,18 @@ function instructions() {
 
 memory.ensureVault(memoryDir());
 
-function handle(msg) {
+async function handle(msg) {
   const { method, params = {} } = msg;
   if (method === 'initialize') {
     return { protocolVersion: params.protocolVersion || '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'ultron-hub', version: '1.0.0' }, instructions: instructions() };
   }
   if (method === 'ping') return {};
-  if (method === 'tools/list') return { tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) };
+  if (method === 'tools/list') return { tools: visibleTools().map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) };
   if (method === 'tools/call') {
-    const tool = TOOLS.find(t => t.name === params.name);
+    const tool = visibleTools().find(t => t.name === params.name);
     if (!tool) throw Object.assign(new Error(`Unknown tool ${params.name}`), { code: -32602 });
     try {
-      return { content: [{ type: 'text', text: tool.run(params.arguments || {}) }] };
+      return { content: [{ type: 'text', text: await tool.run(params.arguments || {}) }] };
     } catch (err) {
       return { content: [{ type: 'text', text: err.message }], isError: true };
     }
@@ -171,13 +180,13 @@ function handle(msg) {
   throw Object.assign(new Error(`Unknown method ${method}`), { code: -32601 });
 }
 
-readline.createInterface({ input: process.stdin }).on('line', line => {
+readline.createInterface({ input: process.stdin }).on('line', async line => {
   let msg;
   try { msg = JSON.parse(line); } catch { return; }
   if (msg.id === undefined) return;
   let reply;
   try {
-    reply = { jsonrpc: '2.0', id: msg.id, result: handle(msg) };
+    reply = { jsonrpc: '2.0', id: msg.id, result: await handle(msg) };
   } catch (err) {
     reply = { jsonrpc: '2.0', id: msg.id, error: { code: err.code || -32603, message: err.message } };
   }

@@ -10,6 +10,10 @@ const CREW_FILE = path.join(HUB_DIR, 'crew.json');
 const SESSIONS_FILE = path.join(HUB_DIR, 'sessions.json');
 const EVENTS_FILE = path.join(HUB_DIR, 'events.jsonl');
 const MEMORY_DIR = path.join(HUB_DIR, 'memory');
+const NODE_LAUNCHER = path.join(HUB_DIR, 'bin', 'ultron-node.cmd');
+
+// Node mode can't read inside app.asar; the hub folder is unpacked next to it.
+const unpacked = file => file.replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
 
 function readJson(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
@@ -46,4 +50,4 @@ function recentEvents(since, bytes = 256 * 1024) {
   }
 }
 
-module.exports = { HUB_DIR, MEMORY_DIR, CREW_FILE, SESSIONS_FILE, EVENTS_FILE, readJson, writeJson, appendEvent, recentEvents };
+module.exports = { HUB_DIR, MEMORY_DIR, NODE_LAUNCHER, unpacked, CREW_FILE, SESSIONS_FILE, EVENTS_FILE, readJson, writeJson, appendEvent, recentEvents };

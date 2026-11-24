@@ -4,12 +4,12 @@ import { drawerOpen, installUi, modalOpen, phase, placeThumbs, toast } from './l
 import { api, loadModels, loadTargets, state } from './lib/state.js';
 import * as accounts from './pages/accounts.js';
 import * as usage from './pages/usage.js';
-import * as crew from './pages/crew.js';
+import * as ultron from './pages/ultron.js';
 import * as settings from './pages/settings.js';
 import * as editor from './pages/editor.js';
 
-const PAGES = { accounts, usage, crew, settings };
-const SHORTCUTS = { 1: 'accounts', 2: 'usage', 3: 'crew', ',': 'settings' };
+const PAGES = { accounts, usage, ultron, settings };
+const SHORTCUTS = { 1: 'accounts', 2: 'usage', 3: 'ultron', ',': 'settings' };
 let current = 'accounts';
 
 function applyTheme() {
@@ -32,7 +32,7 @@ function show(page) {
   $('#scroller').scrollTop = 0;
   if (page === 'usage' && !state.usageData) usage.load();
   else if (page === 'settings') settings.load();
-  else if (page === 'crew') crew.load();
+  else if (page === 'ultron') ultron.load();
   else PAGES[page].render();
   placeThumbs($('.page.active'));
 }
@@ -54,7 +54,8 @@ async function refreshLive() {
   renderSidebar();
   if (current === 'accounts' && !modalOpen()) accounts.render();
   if (state.usageData) await usage.load();
-  if (current === 'crew' && !modalOpen()) await crew.load();
+  if (current === 'ultron' && !modalOpen()) await ultron.load();
+  $('.nav-item[data-page="ultron"]').classList.toggle('ping', (await api.tasks.list()).some(t => t.status === 'waiting'));
 }
 
 function onKey(e) {
@@ -91,6 +92,7 @@ async function boot() {
   await refreshLive();
   api.onLive(refreshLive);
   api.onToast(text => toast(text));
+  api.onGoto(page => show(page));
   Promise.all(state.config.accounts.filter(a => a.model).map(a => loadModels(a.id))).then(() => accounts.render());
   // Relative times ("5m ago") drift between live events, so the cards re-render each minute.
   setInterval(() => { if (current === 'accounts' && !modalOpen()) accounts.render(); }, 60000);

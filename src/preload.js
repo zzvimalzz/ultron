@@ -23,7 +23,9 @@ contextBridge.exposeInMainWorld('ultron', {
   pickFolder: invoke('dialog:pickFolder'),
   info: invoke('app:info'),
   openPath: invoke('app:openPath'),
+  tasks: Object.fromEntries(['start', 'stop', 'list', 'get', 'answer', 'undo', 'terminal'].map(name => [name, invoke(`tasks:${name}`)])),
   memory: Object.fromEntries(['setDir', 'search', 'pending', 'confirm', 'reject', 'keep', 'drop', 'recent'].map(name => [name, invoke(`memory:${name}`)])),
   onToast: fn => ipcRenderer.on('toast', (_e, text) => fn(text)),
+  onGoto: fn => ipcRenderer.on('goto', (_e, page) => fn(page)),
   onLive: fn => ipcRenderer.on('live', () => fn()),
 });
