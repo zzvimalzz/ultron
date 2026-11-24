@@ -23,8 +23,9 @@ export const badge = (text, { tone = '', attrs = '' } = {}) => `<span class="bad
 export const chip = (label, { on: active = false, attrs = '' } = {}) =>
   `<button class="chip ${active ? 'on' : ''}" aria-pressed="${active}" ${attrs}>${esc(label)}</button>`;
 
-export const toggle = (name, active, label) =>
-  `<button class="switch ${active ? 'on' : ''}" data-toggle="${name}" role="switch" aria-checked="${!!active}" aria-label="${esc(label)}"></button>`;
+// `locked` is the reason a switch can't be changed; it shows as a tooltip over the dimmed switch.
+export const toggle = (name, active, label, locked = '') =>
+  `<span${locked ? ` data-tip="${tip(locked)}"` : ''}><button class="switch ${active ? 'on' : ''}" data-toggle="${name}" role="switch" aria-checked="${!!active}" aria-label="${esc(label)}"${locked ? ' disabled' : ''}></button></span>`;
 
 export const onToggle = (root, name, handler) => on(root, 'click', `[data-toggle="${name}"]`, btn => handler(btn.getAttribute('aria-checked') !== 'true'));
 
@@ -90,7 +91,7 @@ function toggleSelect(el) {
   menu.className = 'menu';
   menu.setAttribute('role', 'listbox');
   menu.innerHTML = items.map(o => `<button role="option" data-value="${esc(o.value)}" aria-selected="${String(o.value) === el.dataset.value}"${o.disabled ? ` disabled data-tip="${tip(o.disabled)}"` : ''}>`
-    + `<span class="menu-check">${String(o.value) === el.dataset.value ? ICONS.check : ''}</span>${esc(o.label)}</button>`).join('');
+    + `<span class="menu-check">${String(o.value) === el.dataset.value ? ICONS.check : ''}</span>${esc(o.label)}${o.hint ? `<span class="hint">${esc(o.hint)}</span>` : ''}</button>`).join('');
   el.appendChild(menu);
   $('.select-btn', el).setAttribute('aria-expanded', 'true');
 }

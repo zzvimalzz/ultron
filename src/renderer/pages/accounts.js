@@ -1,7 +1,7 @@
 import { $, esc, on } from '../lib/dom.js';
 import * as fmt from '../lib/format.js';
 import { colorHex, mascotSVG } from '../lib/mascots.js';
-import { ICONS, button, errorText, flip, phase, tip, toast } from '../lib/ui.js';
+import { ICONS, badge, button, errorText, flip, phase, tip, toast } from '../lib/ui.js';
 import { api, state, accountById, loadTargets } from '../lib/state.js';
 import { planBadge, planChoices } from '../lib/plan.js';
 import { openEditor } from './editor.js';
@@ -23,6 +23,13 @@ function planAsk(account, live) {
   if (!badge) return '';
   const menu = askFor === account.id ? `<div class="menu" role="menu">${planChoices.map(([tier, label]) => `<button role="menuitem" data-plan-pick="${tier}">${label}</button>`).join('')}</div>` : '';
   return `<span class="plan-wrap">${badge}${menu}</span>`;
+}
+
+// Opus · high; nothing for the CLI default.
+function modelChip(account) {
+  if (!account.model) return '';
+  const label = state.models[account.id]?.find(m => m.id === account.model)?.label || account.model;
+  return `<div class="acct-chip">${badge(account.effort ? `${label} · ${account.effort}` : label, { tone: 'muted' })}</div>`;
 }
 
 function card(account, index) {
@@ -47,7 +54,7 @@ function card(account, index) {
         <div class="acct-title">
           <div class="acct-names">
             <div class="acct-line"><div class="acct-name">${esc(account.name)}</div>${planAsk(account, live)}</div>
-            ${account.subtitle ? `<div class="acct-sub">${esc(account.subtitle)}</div>` : ''}
+            ${account.subtitle ? `<div class="acct-sub">${esc(account.subtitle)}</div>` : ''}${modelChip(account)}
           </div>
           ${needsSignIn ? `<span class="acct-action">${button('Sign in', { kind: 'primary sm', attrs: 'data-sign-in' })}</span>` : `<div class="split">
             <span class="split-main"${target ? ` data-tip="${tip(`Open with ${target.label}`)}"` : ''}>Open ${ICONS.arrow}</span>

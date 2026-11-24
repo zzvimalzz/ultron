@@ -23,5 +23,6 @@ contextBridge.exposeInMainWorld('ultron', {
   pickFolder: invoke('dialog:pickFolder'),
   info: invoke('app:info'),
   openPath: invoke('app:openPath'),
+  onToast: fn => ipcRenderer.on('toast', (_e, text) => fn(text)),
   onLive: fn => ipcRenderer.on('live', () => fn()),
 });

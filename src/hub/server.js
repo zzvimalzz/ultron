@@ -48,10 +48,15 @@ function notes() {
   });
 }
 
+const notInCrew = agent => ({ free: 'free plan', unknown: 'plan unknown' })[agent.tier] || 'left out by the user';
+
 function crewTool() {
   const { crew, me } = whoAmI();
-  const lines = crew.agents.map(a => `- ${a.name}${a.id === crew.leader ? ' (leader)' : ''}${me && a.id === me.id ? ' (you)' : ''}: ${a.status}. Good at: ${a.strengths.join(', ')}.`);
-  return `${lines.join('\n') || 'No agents yet. Open Ultron to set up the crew.'}\n\nRoute image and GIF work to ChatGPT and SVG work to Claude.`;
+  const lines = crew.agents.map(a => {
+    const flags = `${a.id === crew.leader ? ' (leader)' : ''}${me && a.id === me.id ? ' (you)' : ''}${a.eligible ? '' : ` (not in crew: ${notInCrew(a)})`}`;
+    return `- ${a.name}${flags}: ${a.tier} · ${a.model || 'default'}${a.effort ? `/${a.effort}` : ''} · roles: ${a.roles.join(', ')} · ${a.status}`;
+  });
+  return lines.join('\n') || 'No agents yet. Open Ultron to set up the crew.';
 }
 
 function recall({ query = '' }) {
@@ -107,7 +112,7 @@ const text = description => ({ type: 'string', description });
 
 const TOOLS = [
   { name: 'crew', run: crewTool, inputSchema: object(),
-    description: 'List the AI agents on this PC: the leader, what each one is good at, and who is working right now.' },
+    description: 'List the AI agents on this PC: the leader, what each one does, and who is working right now.' },
   { name: 'recall', run: recall, inputSchema: object({ query: text('Words to search for; leave empty to list recent notes') }),
     description: 'Search the memory shared by every agent. Use it before work that may have history.' },
   { name: 'remember', run: remember, inputSchema: object({ title: text('Short note title'), text: text('The note, in Markdown') }, ['title', 'text']),
@@ -124,7 +129,7 @@ function instructions() {
   return [
     `Ultron Hub connects you to the other AI agents on this PC (${crew.agents.map(a => a.name).join(', ') || 'none yet'}).${leader ? ` The leader is ${leader.name}.` : ''}`,
     'Call recall before work that may have history, and remember durable decisions and findings.',
-    'Image and GIF work belongs to ChatGPT; SVG work belongs to Claude. Use send_message to hand work over, and check_inbox when other agents are mentioned.',
+    'Use the crew tool to see which agent does which kind of work. Use send_message to hand work over, and check_inbox when other agents are mentioned.',
   ].join('\n');
 }
 

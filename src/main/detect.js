@@ -4,17 +4,32 @@ const { detect, signedIn } = require('../hub/cli');
 const REFRESH_MS = 6 * 3600 * 1000;
 const STARTUP_DELAY_MS = 5000;
 
+// A saved model or effort the account's CLI no longer offers goes back to the CLI default.
+function healAccount(account, models) {
+  if (!models.length) return null;
+  const known = models.some(m => m.id === account.model);
+  const model = known ? account.model : '';
+  const efforts = models.find(m => m.id === model).efforts;
+  const effort = efforts.includes(account.effort) ? account.effort : '';
+  return model === account.model && effort === account.effort ? null : { model, effort, modelReset: !known };
+}
+
 // Plans and model lists come from each account's own CLI. Results live in memory; the config keeps only the
 // last plan label and tier so badges show at once on the next start.
-function createDetection({ store, version, onChange }) {
+function createDetection({ store, version, onChange, onReset }) {
   const results = new Map();
   const inflight = new Map();
   let started = false;
   let chain = Promise.resolve();
 
   function persist(account, found) {
-    if (found.tier === 'unknown') return;
-    store.updateAccount(account.id, { plan: { label: found.plan, tier: found.tier, checkedAt: found.checkedAt } });
+    const healed = healAccount(account, found.models);
+    if (healed) {
+      const { modelReset, ...patch } = healed;
+      store.updateAccount(account.id, patch);
+      if (modelReset) onReset(account);
+    }
+    if (found.tier !== 'unknown') store.updateAccount(account.id, { plan: { label: found.plan, tier: found.tier, checkedAt: found.checkedAt } });
   }
 
   // One account at a time, so detections never overlap and never start in the live tick.
@@ -68,4 +83,4 @@ function createDetection({ store, version, onChange }) {
   };
 }
 
-module.exports = { createDetection };
+module.exports = { createDetection, healAccount };

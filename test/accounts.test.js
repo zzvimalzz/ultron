@@ -10,8 +10,8 @@ const path = require('path');
 const TEMP = fs.mkdtempSync(path.join(os.tmpdir(), 'ultron-accounts-'));
 Object.assign(process.env, { HOME: TEMP, USERPROFILE: TEMP, LOCALAPPDATA: path.join(TEMP, 'Local'), APPDATA: path.join(TEMP, 'Roaming') });
 
-const { CLIS, cliEnv, signedIn, spawnCli } = require('../src/hub/cli');
-const { blankAccount, createStore } = require('../src/main/config');
+const { CLIS, cliEnv, modelArgs, signedIn, spawnCli } = require('../src/hub/cli');
+const { blankAccount, createStore, migrate } = require('../src/main/config');
 const { availableTargets, openAccount } = require('../src/main/targets');
 
 const acct = (provider, cliHome = '') => ({ id: `${provider}-1`, provider, cliHome });
@@ -68,4 +68,20 @@ test('spawnCli runs npm shims through cmd.exe and everything else directly', () 
   assert.strictEqual(calls[0][2].windowsVerbatimArguments, true);
   assert.strictEqual(calls[0][2].cwd, 'x');
   assert.deepStrictEqual(calls[1], ['C:\\bin\\claude.exe', ['-p'], { cwd: 'y' }]);
+});
+
+test('modelArgs builds the arguments for each CLI from the chosen model and effort', () => {
+  const both = { model: 'sonnet', effort: 'low' };
+  assert.deepStrictEqual(modelArgs({ provider: 'claude', ...both }), ['--model', 'sonnet', '--effort', 'low']);
+  assert.deepStrictEqual(modelArgs({ provider: 'claude', model: '', effort: 'low' }), ['--effort', 'low']);
+  assert.deepStrictEqual(modelArgs({ provider: 'chatgpt', ...both }), ['-m', 'sonnet', '-c', 'model_reasoning_effort=low']);
+  assert.deepStrictEqual(modelArgs({ provider: 'chatgpt', model: 'm', effort: '' }), ['-m', 'm']);
+  assert.deepStrictEqual(modelArgs({ provider: 'chatgpt', model: '', effort: '' }), []);
+});
+
+test('migrate adds the model, roles and crew fields and keeps values already set', () => {
+  const config = migrate({ accounts: [{ provider: 'claude', model: 'opus', roles: ['qa'] }, { provider: 'chatgpt' }] });
+  const [claude, chatgpt] = config.accounts;
+  assert.deepStrictEqual([claude.model, claude.effort, claude.roles, claude.inCrew, claude.maxRuns], ['opus', '', ['qa'], true, 2]);
+  assert.deepStrictEqual(chatgpt.roles, ['code', 'images', 'research', 'review']);
 });

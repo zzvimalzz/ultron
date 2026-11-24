@@ -40,9 +40,9 @@ test('hub shares memory and routes messages between agents', async () => {
   fs.writeFileSync(path.join(home, '.ultron', 'crew.json'), JSON.stringify({
     leader: 'c1',
     agents: [
-      { id: 'c1', name: 'Claude 1', provider: 'claude', strengths: ['Code', 'SVG'], status: 'working' },
-      { id: 'c2', name: 'Claude 2', provider: 'claude', strengths: ['Code', 'SVG'], status: 'idle' },
-      { id: 'g1', name: 'ChatGPT', provider: 'chatgpt', strengths: ['Code', 'Images', 'GIFs'], status: 'idle' },
+      { id: 'c1', name: 'Claude 1', provider: 'claude', model: '', effort: '', roles: ['code', 'svg'], tier: 'paid', eligible: true, status: 'working' },
+      { id: 'c2', name: 'Claude 2', provider: 'claude', model: '', effort: '', roles: ['code', 'svg'], tier: 'paid', eligible: true, status: 'idle' },
+      { id: 'g1', name: 'ChatGPT', provider: 'chatgpt', model: 'gpt-x', effort: 'high', roles: ['code', 'images'], tier: 'free', eligible: false, status: 'idle' },
     ],
   }));
   fs.writeFileSync(path.join(home, '.ultron', 'sessions.json'), JSON.stringify([{ agent: 'c2', provider: 'claude', cwd: project, last: Date.now() }]));
@@ -55,7 +55,11 @@ test('hub shares memory and routes messages between agents', async () => {
     const { tools } = (await claude.call('tools/list')).result;
     assert.deepStrictEqual(tools.map(t => t.name), ['crew', 'recall', 'remember', 'send_message', 'check_inbox']);
 
-    assert.match((await claude.tool('crew')).content[0].text, /Claude 2 \(you\)/);
+    const crewText = (await claude.tool('crew')).content[0].text;
+    assert.match(crewText, /Claude 2 \(you\): paid · default · roles: code, svg · idle/);
+    assert.match(crewText, /ChatGPT \(not in crew: free plan\): free · gpt-x\/high · roles: code, images/);
+    assert.doesNotMatch(init.result.instructions, /Image and GIF/);
+    assert.match(init.result.instructions, /Use the crew tool/);
     await claude.tool('remember', { title: 'Release process', text: 'Tag v* to publish the installer.' });
     assert.match((await chatgpt.tool('recall', { query: 'installer tag' })).content[0].text, /Release process/);
 

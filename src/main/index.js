@@ -10,6 +10,7 @@ const { createUsage } = require('./usage');
 const { connectAgents } = require('./agents');
 const crew = require('./crew');
 const { createDetection } = require('./detect');
+const { ROLES } = require('../hub/roles');
 
 const LIVE_INTERVAL_MS = 4000;
 const MICA = process.platform === 'win32' && Number(os.release().split('.')[2]) >= 22000;
@@ -136,7 +137,7 @@ function registerIpc() {
     const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0];
   });
-  ipcMain.handle('app:info', () => ({ version: app.getVersion(), userData: app.getPath('userData') }));
+  ipcMain.handle('app:info', () => ({ version: app.getVersion(), userData: app.getPath('userData'), roles: ROLES }));
   ipcMain.handle('app:openPath', (_e, p) => shell.openPath(p));
 }
 
@@ -150,7 +151,7 @@ app.whenReady().then(async () => {
   store = createStore(path.join(app.getPath('userData'), 'config.json'));
   await store.load();
   usage = createUsage(path.join(app.getPath('userData'), 'usage-cache.json'));
-  detection = createDetection({ store, version: app.getVersion(), onChange: () => { if (win && !win.isDestroyed()) win.webContents.send('live'); } });
+  detection = createDetection({ store, version: app.getVersion(), onReset: account => win?.webContents.send('toast', `${account.name}: model reset to default`), onChange: () => { if (win && !win.isDestroyed()) win.webContents.send('live'); } });
   nativeTheme.themeSource = store.get().theme || 'system';
   nativeTheme.on('updated', applyTheme);
   // Re-registering keeps the hub's path right after Ultron moves or updates.

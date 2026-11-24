@@ -1,7 +1,7 @@
 import { $, $$, esc } from './lib/dom.js';
 import { brandSVG, colorHex, mascotSVG } from './lib/mascots.js';
-import { drawerOpen, installUi, modalOpen, phase, placeThumbs } from './lib/ui.js';
-import { api, loadTargets, state } from './lib/state.js';
+import { drawerOpen, installUi, modalOpen, phase, placeThumbs, toast } from './lib/ui.js';
+import { api, loadModels, loadTargets, state } from './lib/state.js';
 import * as accounts from './pages/accounts.js';
 import * as usage from './pages/usage.js';
 import * as crew from './pages/crew.js';
@@ -73,6 +73,7 @@ function onKey(e) {
 
 async function boot() {
   state.config = await api.getConfig();
+  state.info = await api.info();
   document.documentElement.classList.toggle('mica', api.mica);
   applyTheme();
   $('#brandMark').innerHTML = brandSVG(26);
@@ -89,6 +90,8 @@ async function boot() {
   await loadTargets();
   await refreshLive();
   api.onLive(refreshLive);
+  api.onToast(text => toast(text));
+  Promise.all(state.config.accounts.filter(a => a.model).map(a => loadModels(a.id))).then(() => accounts.render());
   // Relative times ("5m ago") drift between live events, so the cards re-render each minute.
   setInterval(() => { if (current === 'accounts' && !modalOpen()) accounts.render(); }, 60000);
 }

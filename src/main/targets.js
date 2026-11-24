@@ -4,13 +4,13 @@ const path = require('path');
 const { spawn } = require('child_process');
 const { shell } = require('electron');
 const { LOCAL, findPackage } = require('./profiles');
-const { CLIS, exists, which, cliEnv } = require('../hub/cli');
+const { CLIS, exists, which, cliEnv, modelArgs } = require('../hub/cli');
 const { HUB_DIR } = require('../hub/files');
 
 // multiDesktop: Claude runs one window per --user-data-dir; ChatGPT is a single-instance MSIX.
 const PROVIDERS = {
-  claude: { label: 'Claude', web: 'https://claude.ai', download: 'https://claude.ai/download', defaultTarget: 'claude-desktop', cliTarget: 'claude-cli', multiDesktop: true, strengths: ['Code', 'SVG'] },
-  chatgpt: { label: 'ChatGPT', web: 'https://chatgpt.com', download: 'https://chatgpt.com/download', defaultTarget: 'chatgpt-desktop', cliTarget: 'codex-cli', multiDesktop: false, strengths: ['Code', 'Images', 'GIFs'] },
+  claude: { label: 'Claude', web: 'https://claude.ai', download: 'https://claude.ai/download', defaultTarget: 'claude-desktop', cliTarget: 'claude-cli', multiDesktop: true },
+  chatgpt: { label: 'ChatGPT', web: 'https://chatgpt.com', download: 'https://chatgpt.com/download', defaultTarget: 'chatgpt-desktop', cliTarget: 'codex-cli', multiDesktop: false },
 };
 
 // Microsoft Store build first, then the standalone installer's location.
@@ -67,13 +67,13 @@ const TARGETS = [
     open: (exe, a) => detached(exe, splitArgs(a.args)) },
   { id: 'claude-cli', label: 'Claude Code CLI', provider: 'claude', cli: true,
     locate: () => which('claude'),
-    open: (exe, a) => inTerminal('Claude Code', exe, [], cliEnv(a)) },
+    open: (exe, a) => inTerminal('Claude Code', exe, modelArgs(a), cliEnv(a)) },
   { id: 'chatgpt-desktop', label: 'ChatGPT Desktop', provider: 'chatgpt',
     locate: chatgptAppId,
     open: appId => detached('explorer.exe', [`shell:AppsFolder\\${appId}`]) },
   { id: 'codex-cli', label: 'Codex CLI', provider: 'chatgpt', cli: true,
     locate: () => which('codex'),
-    open: (exe, a) => inTerminal('Codex', exe, [], cliEnv(a)) },
+    open: (exe, a) => inTerminal('Codex', exe, modelArgs(a), cliEnv(a)) },
   // VS Code is single-instance, so an account with its own CLI home gets its own user-data folder and window.
   { id: 'vscode', label: 'VS Code', cli: true,
     locate: vscodeExe,

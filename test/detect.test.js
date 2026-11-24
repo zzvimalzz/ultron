@@ -10,6 +10,7 @@ Object.assign(process.env, { HOME: TEMP, USERPROFILE: TEMP, LOCALAPPDATA: path.j
 
 const { parseClaudeInit, parseCodexReplies, tierOf } = require('../src/hub/cli');
 const { effectiveTier, eligible } = require('../src/main/crew');
+const { healAccount } = require('../src/main/detect');
 
 test('parseClaudeInit reads the plan and each model with its effort levels', () => {
   const reply = {
@@ -19,6 +20,7 @@ test('parseClaudeInit reads the plan and each model with its effort levels', () 
       response: {
         account: { subscriptionType: 'pro', email: 'someone@example.com' },
         models: [
+          { value: 'default', displayName: 'Default (recommended)', description: 'The usual one', supportedEffortLevels: ['low', 'medium'] },
           { value: 'model-big', displayName: 'Big', description: 'Most capable', supportsEffort: true, supportedEffortLevels: ['low', 'high'] },
           { value: 'model-small', displayName: 'Small', supportsEffort: false },
         ],
@@ -28,6 +30,7 @@ test('parseClaudeInit reads the plan and each model with its effort levels', () 
   assert.deepStrictEqual(parseClaudeInit(reply), {
     plan: 'pro', tier: 'paid', limits: null,
     models: [
+      { id: '', label: 'Default', description: 'The usual one', efforts: ['low', 'medium'] },
       { id: 'model-big', label: 'Big', description: 'Most capable', efforts: ['low', 'high'] },
       { id: 'model-small', label: 'Small', description: '', efforts: [] },
     ],
@@ -46,8 +49,9 @@ test('parseCodexReplies joins model pages, drops hidden models and reads the fir
   });
   assert.strictEqual(found.plan, 'free');
   assert.strictEqual(found.tier, 'free');
-  assert.deepStrictEqual(found.models.map(m => m.id), ['gpt-a', 'gpt-b']);
-  assert.deepStrictEqual(found.models[0].efforts, ['low', 'high']);
+  assert.deepStrictEqual(found.models.map(m => m.id), ['', 'gpt-a', 'gpt-b']);
+  assert.deepStrictEqual(found.models[1].efforts, ['low', 'high']);
+  assert.deepStrictEqual(found.models[0], { id: '', label: 'Default', description: '', efforts: ['low', 'high'] });
   assert.deepStrictEqual(found.limits, { usedPercent: 11, resetsAt: 1800000000 });
 });
 
@@ -69,4 +73,18 @@ test('a detected plan wins over the user\'s answer, which only fills in while de
   assert.strictEqual(eligible({}, 'team'), true);
   assert.strictEqual(eligible({}, 'free'), false);
   assert.strictEqual(eligible({}, 'unknown'), false);
+});
+
+const models = [
+  { id: '', label: 'Default', efforts: ['low', 'high'] },
+  { id: 'big', label: 'Big', efforts: ['low', 'medium', 'high', 'max'] },
+  { id: 'small', label: 'Small', efforts: [] },
+];
+
+test('a saved model the CLI no longer lists goes back to the default, and so does an unsupported effort', () => {
+  assert.strictEqual(healAccount({ model: 'big', effort: 'max' }, models), null);
+  assert.deepStrictEqual(healAccount({ model: 'gone', effort: 'low' }, models), { model: '', effort: 'low', modelReset: true });
+  assert.deepStrictEqual(healAccount({ model: 'gone', effort: 'max' }, models), { model: '', effort: '', modelReset: true });
+  assert.deepStrictEqual(healAccount({ model: 'small', effort: 'low' }, models), { model: 'small', effort: '', modelReset: false });
+  assert.strictEqual(healAccount({ model: 'gone', effort: '' }, []), null);
 });

@@ -4,6 +4,7 @@ A small Windows launcher for Claude and ChatGPT desktop accounts, with a local u
 
 - **Accounts:** one card per account with a pixel mascot, live running state, last opened time, and tokens and active time for the last 24 hours. Click a card or press `1`–`9` to open it; the arrow next to **Open** chooses how (desktop app, CLI, VS Code or browser) and remembers the choice.
 - **Plans:** each signed-in account shows its plan (Pro, Plus, Free…) as a badge, read from that account's own CLI without a model call and refreshed every six hours. If the plan can't be detected the badge asks you. Free accounts are left out of the crew.
+- **Model and roles:** each account can pick a model and effort from its own CLI's live list, the kinds of work it does (code, UI/UX, QA, testing, research, review, images, SVG), whether it is in the crew and how many headless runs it carries. The terminal opens with the chosen model and effort; the hub's `crew` tool reports them to every agent.
 - **Usage:** tokens, token mix, top model, active time, sessions, tokens over time, a Week / Month / Year activity heatmap, models, accounts and projects. Filter by account and by 24H, 7D, 30D, 90D or All.
 - **Crew:** a live flowchart of you, the leader, every agent, their sessions and subagents, who is working, and who is messaging whom. **Connect agents** gives Claude Code and Codex the Ultron Hub (shared memory and messages) and the `kiss` and `repo-structure` skills; **Disconnect** removes them.
 - **Settings:** name, theme, minimize after opening, shared memory folder.

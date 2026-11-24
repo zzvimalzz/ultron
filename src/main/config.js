@@ -4,8 +4,9 @@ const path = require('path');
 const { LOCAL, ROAMING, findShortcuts, resolveDataDir } = require('./profiles');
 const { PROVIDERS, isInstalled } = require('./targets');
 const { HUB_DIR } = require('../hub/files');
+const { DEFAULT_ROLES } = require('../hub/roles');
 
-const VERSION = 5;
+const VERSION = 6;
 const HOMES_DIR = path.join(HUB_DIR, 'homes');
 
 function defaultClaudeDataDir() {
@@ -31,6 +32,11 @@ function account(provider, index, fields) {
     openWith: PROVIDERS[provider].defaultTarget,
     lastOpened: 0,
     planAnswer: null,
+    model: '',
+    effort: '',
+    roles: [...DEFAULT_ROLES[provider]],
+    inCrew: true,
+    maxRuns: 2,
     ...fields,
   };
 }
@@ -84,6 +90,11 @@ function migrate(config) {
     a.openWith ||= PROVIDERS[a.provider].defaultTarget;
     a.cliHome ??= '';
     a.planAnswer ??= null;
+    a.model ??= '';
+    a.effort ??= '';
+    a.roles ??= [...DEFAULT_ROLES[a.provider]];
+    a.inCrew ??= true;
+    a.maxRuns ??= 2;
     delete a.launches;
     delete a.target;
     delete a.pathHints;
@@ -127,4 +138,4 @@ function createStore(file) {
   };
 }
 
-module.exports = { createStore, blankAccount };
+module.exports = { createStore, blankAccount, migrate };

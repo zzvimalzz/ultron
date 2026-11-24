@@ -10,10 +10,12 @@ const CLIS = {
   claude: {
     command: 'claude', homeEnv: 'CLAUDE_CONFIG_DIR', defaultHome: path.join(os.homedir(), '.claude'),
     transcripts: 'projects', instructions: 'CLAUDE.md', credentials: '.credentials.json', login: ['auth', 'login'],
+    modelArgs: model => ['--model', model], effortArgs: effort => ['--effort', effort],
   },
   chatgpt: {
     command: 'codex', homeEnv: 'CODEX_HOME', defaultHome: path.join(os.homedir(), '.codex'),
     transcripts: 'sessions', instructions: 'AGENTS.md', credentials: 'auth.json', login: ['login'],
+    modelArgs: model => ['-m', model], effortArgs: effort => ['-c', `model_reasoning_effort=${effort}`],
   },
 };
 
@@ -43,6 +45,12 @@ function cliEnv(account, base = process.env) {
 
 // Existence only: the credentials file holds tokens and is never read here.
 const signedIn = account => exists(path.join(homeOf(account), CLIS[account.provider].credentials));
+
+// The chosen model and effort as CLI arguments, for the terminal and for headless runs.
+function modelArgs(account) {
+  const cli = CLIS[account.provider];
+  return [...(account.model ? cli.modelArgs(account.model) : []), ...(account.effort ? cli.effortArgs(account.effort) : [])];
+}
 
 const SAFE_ARG = /^[\w@+=:,./\\-]+$/;
 
@@ -111,22 +119,28 @@ function converse(account, args, { start, onMessage }) {
   });
 }
 
+// Every model list starts with a Default entry (id ''), so the account's chosen model always has an entry to read efforts from.
+const withDefault = (models, standard) => [{ id: '', label: 'Default', description: standard?.description || '', efforts: standard?.efforts || [] }, ...models];
+
 // `message` is the control_response line, or its inner response.
 function parseClaudeInit(message) {
   const body = message.response?.response || message.response || message;
   const plan = body.account?.subscriptionType || null;
-  const models = (body.models || []).map(m => ({
+  const listed = (body.models || []).map(m => ({
     id: m.value, label: m.displayName, description: m.description || '', efforts: m.supportsEffort === false ? [] : m.supportedEffortLevels || [],
   }));
+  const models = withDefault(listed.filter(m => m.id !== 'default'), listed.find(m => m.id === 'default'));
   return { plan, tier: tierOf('claude', plan), models, limits: null };
 }
 
 // `replies` holds the JSON-RPC results: modelPages (one per model/list page), account and rateLimits.
 function parseCodexReplies({ modelPages = [], account, rateLimits }) {
   const plan = account?.account?.planType || null;
-  const models = modelPages.flatMap(page => page.data || []).filter(m => !m.hidden).map(m => ({
+  const shown = modelPages.flatMap(page => page.data || []).filter(m => !m.hidden);
+  const listed = shown.map(m => ({
     id: m.model || m.id, label: m.displayName, description: m.description || '', efforts: (m.supportedReasoningEfforts || []).map(e => e.reasoningEffort),
   }));
+  const models = withDefault(listed, listed[Math.max(0, shown.findIndex(m => m.isDefault))]);
   const primary = rateLimits?.rateLimits?.primary;
   return { plan, tier: tierOf('chatgpt', plan), models, limits: primary ? { usedPercent: primary.usedPercent, resetsAt: primary.resetsAt } : null };
 }
@@ -194,4 +208,4 @@ async function detect(account, options) {
   }
 }
 
-module.exports = { CLIS, exists, which, homeOf, cliEnv, signedIn, spawnCli, tierOf, parseClaudeInit, parseCodexReplies, detect };
+module.exports = { CLIS, exists, which, homeOf, cliEnv, signedIn, spawnCli, modelArgs, tierOf, parseClaudeInit, parseCodexReplies, detect };

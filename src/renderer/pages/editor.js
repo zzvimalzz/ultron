@@ -1,9 +1,9 @@
 import { $, esc, on } from '../lib/dom.js';
 import { ACCESSORIES, COLORS, EYES, colorHex, mascotSVG } from '../lib/mascots.js';
-import { ICONS, button, closeDrawer, errorText, onSelect, openDrawer, openModal, select, tip, toast, updateDrawer } from '../lib/ui.js';
+import { ICONS, button, chip, closeDrawer, errorText, onSegment, onSelect, onToggle, openDrawer, openModal, segmented, select, skeleton, tip, toast, toggle, updateDrawer } from '../lib/ui.js';
 import { planBadge, planChoices } from '../lib/plan.js';
 import { ago } from '../lib/format.js';
-import { api, state, accountById, loadTargets, saveConfig } from '../lib/state.js';
+import { api, state, accountById, loadModels, loadTargets, saveConfig } from '../lib/state.js';
 
 let onSaved = () => {};
 export const setEditorListener = fn => { onSaved = fn; };
@@ -50,22 +50,53 @@ function planSection(account) {
     + `${asking ? `<div class="picks plans">${planChoices.map(([tier, label]) => `<button class="pick ${account.planAnswer === tier ? 'on' : ''}" data-plan-answer="${tier}">${label}</button>`).join('')}</div>` : ''}</div>`;
 }
 
+const section = (title, html) => `<div class="dsec"><span class="cap">${title}</span>${html}</div>`;
+
+// Model and effort come from the account's own CLI; until the list arrives a skeleton stands in.
+function modelSections(account) {
+  if (state.overview[account.id]?.signedIn === false) return section('Model', button('Sign in', { kind: 'primary', attrs: 'data-sign-in' }));
+  const models = state.models[account.id];
+  if (!models) return section('Model', skeleton('100%', '34px'));
+  if (!models.length) return '';
+  const efforts = models.find(m => m.id === account.model)?.efforts || [];
+  return section('Model', select('model', models.map(m => ({ value: m.id, label: m.label, hint: m.description })), account.model))
+    + (efforts.length ? section('Effort', segmented('effort', [{ value: '', label: 'Default' }, ...efforts.map(e => ({ value: e, label: e }))], account.effort)) : '');
+}
+
+function ultronSection(account) {
+  const tier = state.overview[account.id]?.tier;
+  const locked = tier === 'free' ? 'Free plan' : tier === 'unknown' ? 'Plan unknown' : '';
+  return section('Ultron', `<div class="row"><span class="grow">In crew</span>${toggle('inCrew', account.inCrew && !locked, 'In crew', locked)}</div>`
+    + `<div class="row"><span class="grow">Parallel runs</span><span class="stepper">`
+    + `<button class="icon-btn" data-runs="-1" aria-label="Fewer parallel runs" ${account.maxRuns <= 1 ? 'disabled' : ''}>−</button><b>${account.maxRuns}</b>`
+    + `<button class="icon-btn" data-runs="1" aria-label="More parallel runs" ${account.maxRuns >= 4 ? 'disabled' : ''}>+</button></span></div>`);
+}
+
+const openWithSection = account => section('Open with', `<div class="radios" role="radiogroup">${(state.targets[account.id] || []).map(t =>
+  `<button class="radio" role="radio" aria-checked="${t.id === account.openWith}" data-target="${t.id}"${t.locked ? ` disabled data-tip="${tip(t.locked)}"` : ''}><i></i>${esc(t.label)}</button>`).join('')}</div>`);
+
 function drawerBody(account) {
   const look = appearance(account);
-  const targets = (state.targets[account.id] || []).map(t => ({ value: t.id, label: t.label, disabled: t.locked }));
   return planSection(account)
+    + modelSections(account)
+    + section('Roles', `<div class="chips">${state.info.roles.map(r => chip(r.label, { on: account.roles.includes(r.id), attrs: `data-role="${r.id}"` })).join('')}</div>`)
+    + ultronSection(account)
+    + openWithSection(account)
     + `<div class="dsec"><span class="cap">Appearance</span>${look.look}${look.fields}</div>`
-    + `<div class="dsec"><span class="cap">Open with</span>${select('openWith', targets, account.openWith)}</div>`
     + `<div class="dsec">${advanced(account)}</div>`
     + (state.config.accounts.length > 1 ? `<div class="dsec">${button('Remove account', { kind: 'ghost danger', attrs: 'data-remove' })}</div>` : '');
 }
 
 const drawerLead = account => `<span class="mini" style="--account:${colorHex(account.color)}">${mascotSVG(account, 24)}</span>`;
 
+let savedShown = false;
+const saved = () => { if (!savedShown) { savedShown = true; toast('Saved'); } };
+
 async function commit(patch) {
   const account = withProfileFolder({ ...accountById(editingId), ...patch });
   await saveConfig({ accounts: state.config.accounts.map(a => (a.id === account.id ? account : a)) });
   updateDrawer(drawerBody(account), { title: account.name, lead: drawerLead(account) });
+  saved();
   onSaved();
 }
 
@@ -73,7 +104,12 @@ async function editAccount(id) {
   const account = accountById(id);
   await loadTargets([account]);
   editingId = id;
+  savedShown = false;
   openDrawer(drawerBody(account), { title: account.name, lead: drawerLead(account), onClose: () => { editingId = null; } });
+  if (!state.models[id] && state.overview[id]?.signedIn !== false) {
+    await loadModels(id);
+    if (editingId === id) updateDrawer(drawerBody(accountById(id)));
+  }
 }
 
 export function mount() {
@@ -92,16 +128,32 @@ export function mount() {
   });
   on(drawer, 'click', '[data-detect]', async () => {
     state.overview = await api.detect(editingId);
+    await loadModels(editingId);
+    state.config = await api.getConfig();
     updateDrawer(drawerBody(accountById(editingId)));
     onSaved();
   });
   on(drawer, 'click', '[data-plan-answer]', async btn => {
-    state.config = await api.updateAccount(editingId, { planAnswer: btn.dataset.planAnswer });
+    await commit({ planAnswer: btn.dataset.planAnswer });
     state.overview = await api.overview();
     updateDrawer(drawerBody(accountById(editingId)));
-    onSaved();
   });
-  onSelect(drawer, 'openWith', value => commit({ openWith: value }));
+  on(drawer, 'click', '[data-sign-in]', async () => {
+    try { await api.signIn(editingId, 'cli'); } catch (err) { toast(errorText(err), { kind: 'error' }); }
+  });
+  onSelect(drawer, 'model', model => {
+    const efforts = state.models[editingId].find(m => m.id === model).efforts;
+    commit({ model, effort: efforts.includes(accountById(editingId).effort) ? accountById(editingId).effort : '' });
+  });
+  onSegment(drawer, 'effort', effort => commit({ effort }));
+  on(drawer, 'click', '[data-role]', btn => {
+    const { roles } = accountById(editingId);
+    const id = btn.dataset.role;
+    commit({ roles: roles.includes(id) ? roles.filter(r => r !== id) : [...roles, id] });
+  });
+  onToggle(drawer, 'inCrew', inCrew => commit({ inCrew }));
+  on(drawer, 'click', '[data-runs]', btn => commit({ maxRuns: Math.min(4, Math.max(1, accountById(editingId).maxRuns + Number(btn.dataset.runs))) }));
+  on(drawer, 'click', '[data-target]', btn => commit({ openWith: btn.dataset.target }));
   on(drawer, 'click', '[data-remove]', async btn => {
     if (btn.dataset.confirm !== '1') { btn.dataset.confirm = '1'; btn.textContent = 'Click again to remove'; return; }
     const { id, name } = accountById(editingId);

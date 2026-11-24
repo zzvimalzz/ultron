@@ -9,8 +9,8 @@ import { launch } from './accounts.js';
 const LINK_MS = 10 * 60 * 1000;
 const STATUS = { working: 'Working', open: 'Open', idle: 'Idle' };
 const LEGEND = [['dot working', 'Working'], ['dot open', 'Open'], ['dot idle', 'Idle'], ['line message', 'Message'], ['line memory', 'Memory']];
-const INELIGIBLE = { free: 'Needs a paid plan', unknown: 'Plan unknown' };
-const OTHER = { id: 'other', name: 'VS Code & CLI', provider: 'claude', color: 7, mascot: {}, strengths: [] };
+const INELIGIBLE = { free: 'Free plan', unknown: 'Plan unknown', paid: 'Left out by you', team: 'Left out by you' };
+const OTHER = { id: 'other', name: 'VS Code & CLI', provider: 'claude', color: 7, mascot: {}, roles: [] };
 
 let root;
 let data = null;
@@ -26,19 +26,22 @@ function crewAgents() {
   return others.length ? [...data.agents, { ...OTHER, status: others.some(s => s.working) ? 'working' : 'idle' }] : data.agents;
 }
 
+const roleLabels = a => a.roles.map(id => state.info.roles.find(r => r.id === id)?.label || id);
+
 function agentNode(a, parent) {
   const leader = a.id === data.leader;
+  const roles = roleLabels(a);
   const body = box(200, 70)
     + `<g transform="translate(12 18)">${mascotSVG(a, 42)}</g>`
     + text(66, 26, clip(a.name, 16), 'n-name') + dot(70, 41, a.status) + text(79, 45, STATUS[a.status], 'n-sub')
-    + (a.strengths.length ? text(66, 60, a.strengths.join(' · '), 'n-sub') : '')
+    + (roles.length ? text(66, 60, clip(roles.join(' · '), 24), 'n-sub') : '')
     + (leader ? '<g class="tag" transform="translate(138 -9)"><rect width="54" height="18" rx="9"/><text x="27" y="12.5">Leader</text></g>' : '');
   const clickable = a.id !== OTHER.id;
   const idle = a.eligible === false;
   return {
     id: a.id, parent, w: 200, h: 70, cls: `agent ${a.status}${idle ? ' ineligible' : ''}`, live: a.status === 'working',
     attrs: `style="--account:${colorHex(a.color)}" ${clickable ? `data-node="agent" data-id="${a.id}"` : ''}`
-      + ` data-tip="${tipRows(a.name, [['Status', STATUS[a.status]], ...(idle ? [['Not in crew', INELIGIBLE[a.tier] || INELIGIBLE.unknown]] : []), ...(a.strengths.length ? [['Good at', a.strengths.join(', ')]] : []), ...(clickable ? [['Click', 'Open']] : [])])}"`,
+      + ` data-tip="${tipRows(a.name, [['Status', STATUS[a.status]], ...(idle ? [['Not in crew', INELIGIBLE[a.tier] || INELIGIBLE.unknown]] : []), ...(a.model ? [['Model', a.effort ? `${a.model} · ${a.effort}` : a.model]] : []), ...(roles.length ? [['Roles', roles.join(', ')]] : []), ...(clickable ? [['Click', 'Open']] : [])])}"`,
     body,
   };
 }
