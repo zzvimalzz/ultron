@@ -36,14 +36,14 @@ function createUsage(cacheFile) {
     return aggregate(scanner.records(), ctx, accounts, options);
   }
 
-  // Sessions (and Claude subagents) active in the last ACTIVE_MS, each with its owning account.
-  function sessions(accounts) {
+  // Sessions (and Claude subagents) active within `within` ms, each with its owning account.
+  function sessions(accounts, within = ACTIVE_MS) {
     if (!ctx) return [];
     const now = Date.now();
     return Object.entries(scanner.records()).flatMap(([file, rec]) => {
       const last = rec.blocks[rec.blocks.length - 1];
       const lastActivity = last ? last[0] + last[1] : 0;
-      if (now - lastActivity > ACTIVE_MS) return [];
+      if (now - lastActivity > within) return [];
       const parts = file.split(path.sep);
       const sub = parts.lastIndexOf('subagents');
       return [{

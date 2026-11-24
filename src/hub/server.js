@@ -4,19 +4,15 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-const { HUB_DIR, CREW_FILE, SESSIONS_FILE, EVENTS_FILE, readJson, writeJson, recentEvents } = require('./files');
+const memory = require('./memory');
+const { HUB_DIR, MEMORY_DIR, CREW_FILE, SESSIONS_FILE, readJson, writeJson, appendEvent, recentEvents } = require('./files');
 
 const PROVIDER = process.env.ULTRON_PROVIDER || 'claude';
 const PROVIDER_NAMES = { claude: 'Claude', chatgpt: 'ChatGPT' };
 const WEEK_MS = 7 * 24 * 3600 * 1000;
 const INBOX_DIR = path.join(HUB_DIR, 'inbox');
 const norm = p => path.resolve(p).toLowerCase();
-const memoryDir = () => readJson(CREW_FILE, {}).memoryDir || path.join(HUB_DIR, 'memory');
-
-function appendEvent(event) {
-  fs.mkdirSync(HUB_DIR, { recursive: true });
-  fs.appendFileSync(EVENTS_FILE, `${JSON.stringify({ t: Date.now(), ...event })}\n`);
-}
+const memoryDir = () => readJson(CREW_FILE, {}).memoryDir || MEMORY_DIR;
 
 // The server can't see which account started it, so Ultron publishes active sessions by folder.
 function whoAmI() {
@@ -37,17 +33,6 @@ function sender() {
   return { agent: me ? me.id : null, provider: PROVIDER, cwd: process.cwd() };
 }
 
-function notes() {
-  const dir = memoryDir();
-  let files = [];
-  try { files = fs.readdirSync(dir, { recursive: true }); } catch { return []; }
-  return files.filter(f => f.endsWith('.md') && !/(^|[\\/])(\.|node_modules)/.test(f)).map(f => {
-    const file = path.join(dir, f);
-    const text = fs.readFileSync(file, 'utf8');
-    return { file: f, title: (/^#\s+(.+)$/m.exec(text) || [, path.basename(f, '.md')])[1], text, mtime: fs.statSync(file).mtimeMs };
-  });
-}
-
 const notInCrew = agent => ({ free: 'free plan', unknown: 'plan unknown' })[agent.tier] || 'left out by the user';
 
 function crewTool() {
@@ -59,28 +44,50 @@ function crewTool() {
   return lines.join('\n') || 'No agents yet. Open Ultron to set up the crew.';
 }
 
-function recall({ query = '' }) {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const all = notes();
-  appendEvent({ type: 'memory', action: 'recalled', title: query || 'recent notes', from: sender() });
-  if (!words.length) {
-    const recent = all.sort((a, b) => b.mtime - a.mtime).slice(0, 30);
-    return recent.length ? recent.map(n => `- ${n.title} (${n.file})`).join('\n') : 'Shared memory is empty.';
-  }
-  const hits = all.map(n => {
-    const text = `${n.title}\n${n.text}`.toLowerCase();
-    return { ...n, score: words.every(w => text.includes(w)) ? words.reduce((s, w) => s + text.split(w).length - 1, 0) : 0 };
-  }).filter(n => n.score).sort((a, b) => b.score - a.score).slice(0, 5);
-  return hits.length ? hits.map(n => `## ${n.title} (${n.file})\n${n.text.slice(0, 3000)}`).join('\n\n') : `No notes match "${query}".`;
+// Every memory tool leaves one event with a title only, never note text, so Ultron can show what the crew is doing.
+const memoryEvent = (action, title) => appendEvent({ type: 'memory', action, title, from: sender() });
+
+const source = () => {
+  const { me } = whoAmI();
+  return `${me ? me.name : PROVIDER_NAMES[PROVIDER]} (${PROVIDER})`;
+};
+
+const noteTitle = (vault, file) => memory.titleOf(fs.readFileSync(path.join(vault, file), 'utf8'), file);
+
+function contextTool() {
+  const vault = memoryDir();
+  const project = memory.projectFor(vault, process.cwd());
+  memoryEvent('context', project ? project.slug : 'memory');
+  return memory.context(vault, process.cwd());
 }
 
-function remember({ title, text }) {
-  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60) || 'note';
-  const dir = memoryDir();
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, `${slug}.md`), `# ${title}\n\n${text.trim()}\n`);
-  appendEvent({ type: 'memory', action: 'saved', title, from: sender() });
-  return `Saved "${title}" to shared memory.`;
+function recallTool({ query = '' }) {
+  memoryEvent('recalled', query || 'recent notes');
+  const hits = memory.recall(memoryDir(), query, process.cwd());
+  if (!hits.length) return query ? `No notes match "${query}".` : 'The vault is empty.';
+  return hits.map(h => (h.text ? `## ${h.title} (${h.file})\n${h.text}` : `- ${h.title} (${h.file})`)).join(query ? '\n\n' : '\n');
+}
+
+function rememberTool(args) {
+  const file = memory.remember(memoryDir(), { ...args, cwd: process.cwd() }, source());
+  memoryEvent('saved', `${args.kind}: ${args.title || args.topic || path.basename(file, '.md')}`);
+  return `Saved to ${file}.`;
+}
+
+function updateTool({ file, text }) {
+  const vault = memoryDir();
+  const title = noteTitle(vault, file);
+  const name = memory.update(vault, file, text, source());
+  memoryEvent('updated', title);
+  return `Updated ${name}; the old version is in the archive.`;
+}
+
+function forgetTool({ file }) {
+  const vault = memoryDir();
+  const title = noteTitle(vault, file);
+  const archived = memory.forget(vault, file);
+  memoryEvent('archived', title);
+  return `Archived as ${archived}.`;
 }
 
 function sendMessage({ to, text }) {
@@ -113,12 +120,22 @@ const text = description => ({ type: 'string', description });
 const TOOLS = [
   { name: 'crew', run: crewTool, inputSchema: object(),
     description: 'List the AI agents on this PC: the leader, what each one does, and who is working right now.' },
-  { name: 'recall', run: recall, inputSchema: object({ query: text('Words to search for; leave empty to list recent notes') }),
-    description: 'Search the memory shared by every agent. Use it before work that may have history.' },
-  { name: 'remember', run: remember, inputSchema: object({ title: text('Short note title'), text: text('The note, in Markdown') }, ['title', 'text']),
-    description: 'Save a durable note (decision, convention, finding) to shared memory for the other agents. The same title replaces the note.' },
+  { name: 'context', run: contextTool, inputSchema: object(),
+    description: "What you should know right now: durable memory and the current project's overview and state. Call at the start of substantive work." },
+  { name: 'recall', run: recallTool, inputSchema: object({ query: text('Words to search for; leave empty to list recent notes') }),
+    description: 'Search the memory vault; the current project ranks first.' },
+  { name: 'remember', run: rememberTool, inputSchema: object({
+    kind: { type: 'string', enum: ['fact', 'profile', 'area', 'project-state', 'decision', 'session', 'inbox'], description: 'What is being saved; it decides where' },
+    title: text('Short title (needed for area, decision and session)'), text: text('The note, in Markdown'),
+    project: text('Project name, if not the current folder'), topic: text('For profile: identity, preferences, working-style or goals'),
+  }, ['kind', 'text']),
+    description: 'Save to memory. kind: fact, profile (needs topic), area, project-state, decision, session, inbox. Facts about the user are saved as unconfirmed until the user confirms them.' },
+  { name: 'update', run: updateTool, inputSchema: object({ file: text('Path inside the vault'), text: text('The full new content') }, ['file', 'text']),
+    description: 'Replace a stale note; the old version is archived.' },
+  { name: 'forget', run: forgetTool, inputSchema: object({ file: text('Path inside the vault') }, ['file']),
+    description: 'Archive a note that is no longer true. Nothing is deleted.' },
   { name: 'send_message', run: sendMessage, inputSchema: object({ to: text('Agent name, "leader" or "everyone"'), text: text('The message') }, ['to', 'text']),
-    description: 'Send a message to another agent. Ask ChatGPT for images and GIFs, and Claude for SVG.' },
+    description: 'Send a message to another agent. Use crew to see who does which kind of work.' },
   { name: 'check_inbox', run: checkInbox, inputSchema: object(),
     description: 'Read the messages other agents sent you since you last checked.' },
 ];
@@ -128,10 +145,12 @@ function instructions() {
   const leader = crew.agents.find(a => a.id === crew.leader);
   return [
     `Ultron Hub connects you to the other AI agents on this PC (${crew.agents.map(a => a.name).join(', ') || 'none yet'}).${leader ? ` The leader is ${leader.name}.` : ''}`,
-    'Call recall before work that may have history, and remember durable decisions and findings.',
+    `This device's memory vault is ${memoryDir()}. Call context at the start, recall before work that may have history, and remember outcomes (kind: session) and decisions before you finish. Follow PROTOCOL.md in the vault.`,
     'Use the crew tool to see which agent does which kind of work. Use send_message to hand work over, and check_inbox when other agents are mentioned.',
   ].join('\n');
 }
+
+memory.ensureVault(memoryDir());
 
 function handle(msg) {
   const { method, params = {} } = msg;

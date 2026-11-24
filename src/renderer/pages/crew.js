@@ -5,6 +5,7 @@ import { ICONS, button, errorText, onSegment, options, phase, segmented, skeleto
 import { flowchart } from '../lib/flowchart.js';
 import { api, state, saveConfig } from '../lib/state.js';
 import { launch } from './accounts.js';
+import * as memoryView from './memory.js';
 
 const LINK_MS = 10 * 60 * 1000;
 const STATUS = { working: 'Working', open: 'Open', idle: 'Idle' };
@@ -15,6 +16,7 @@ const OTHER = { id: 'other', name: 'VS Code & CLI', provider: 'claude', color: 7
 let root;
 let data = null;
 let seen = null;
+let tab = 'crew';
 
 const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 const box = (w, h) => `<rect class="box" width="${w}" height="${h}" rx="12"/>`;
@@ -117,9 +119,16 @@ export function render() {
     return;
   }
   const leaders = options(state.config.accounts.map(a => [a.id, a.name]));
+  const tabs = segmented('tab', options([['crew', 'Crew'], ['memory', 'Memory']]), tab);
+  if (tab === 'memory') {
+    root.innerHTML = `<div class="page-head"><h1>Crew</h1>${tabs}</div><div id="mem"></div>`;
+    memoryView.load($('#mem', root), data.memoryDir);
+    return;
+  }
   root.innerHTML = `
     <div class="page-head">
       <h1>Crew</h1>
+      ${tabs}
       <div class="head-actions">
         ${leaders.length > 1 ? `<span class="muted">Leader</span>${segmented('leader', leaders, data.leader)}` : ''}
         ${data.connected ? button('Disconnect', { attrs: 'data-connect="off"' }) : `<div class="connect-row">${button('Connect agents', { kind: 'primary', attrs: 'data-connect="on"' })}`
@@ -155,6 +164,8 @@ export function mount(el) {
     }
     load();
   });
+  memoryView.mount(root);
+  onSegment(root, 'tab', value => { tab = value; render(); });
   onSegment(root, 'leader', async id => { await saveConfig({ crew: { ...state.config.crew, leader: id } }); load(); });
   on(root, 'click', '[data-node="agent"]', g => launch(g.dataset.id));
   on(root, 'click', '[data-node="memory"]', async () => {

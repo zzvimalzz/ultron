@@ -5,7 +5,7 @@ export const state = {
   overview: {},
   targets: {},
   models: {},
-  info: { roles: [] },
+  info: { roles: [], sections: [] },
   usageData: null,
   usage: { account: 'all', range: '30d', metric: 'total', rhythm: 'week', projectPage: 0 },
 };

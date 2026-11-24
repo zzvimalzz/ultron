@@ -7,7 +7,8 @@ A small Windows launcher for Claude and ChatGPT desktop accounts, with a local u
 - **Model and roles:** each account can pick a model and effort from its own CLI's live list, the kinds of work it does (code, UI/UX, QA, testing, research, review, images, SVG), whether it is in the crew and how many headless runs it carries. The terminal opens with the chosen model and effort; the hub's `crew` tool reports them to every agent.
 - **Usage:** tokens, token mix, top model, active time, sessions, tokens over time, a Week / Month / Year activity heatmap, models, accounts and projects. Filter by account and by 24H, 7D, 30D, 90D or All.
 - **Crew:** a live flowchart of you, the leader, every agent, their sessions and subagents, who is working, and who is messaging whom. **Connect agents** gives Claude Code and Codex the Ultron Hub (shared memory and messages) and the `kiss` and `repo-structure` skills; **Disconnect** removes them.
-- **Settings:** name, theme, minimize after opening, shared memory folder.
+- **Memory:** one vault of plain Markdown per device (`~/.ultron/memory` by default, or any folder you choose, including an existing vault). Agents read it at the start of a task and record outcomes, decisions and facts in separate places; facts about you wait under **To confirm** or in the **Inbox** until you review them on the Crew page's Memory tab. **Keep memory tidy** lets a chosen account write sessions up after they end and review the vault weekly.
+- **Settings:** name, theme, minimize after opening, memory folder and tidying.
 
 Usage covers Claude Code and Codex sessions stored on this PC. Chat conversations aren't stored locally, so they aren't counted.
 
@@ -45,7 +46,7 @@ npm run package        # build dist/Ultron-Setup-<version>.exe
 | --- | --- |
 | `src/main/` | App lifecycle, IPC, config, profile detection, "Open with" targets, plan detection scheduler |
 | `src/main/usage/` | Incremental transcript scanning, parsing, attribution and aggregation |
-| `src/hub/` | Ultron Hub MCP server, the shared CLI table (`cli.js`) and the skills shipped to every agent |
+| `src/hub/` | Ultron Hub MCP server, the shared CLI table (`cli.js`), the memory vault (`memory.js`, `vault/` skeleton) and the skills shipped to every agent |
 | `src/renderer/` | Vanilla ES-module UI: `lib/` shared helpers, `pages/` one module per page |
 | `test/` | `node:test` suites with synthetic fixtures |
 | `tools/` | Icon generator, personal-details check, screenshot driver |
@@ -59,7 +60,9 @@ Connecting registers `ultron-hub` in `~/.claude.json` and `~/.codex/config.toml`
 | Tool | Does |
 | --- | --- |
 | `crew` | Lists the agents, the leader, what each is good at and who is working |
-| `recall` / `remember` | Search and save Markdown notes in the shared memory folder |
+| `context` | The durable memory plus the current project's overview and state |
+| `recall` / `remember` | Search the vault; save a note of a given kind (fact, profile, area, project-state, decision, session, inbox) |
+| `update` / `forget` | Replace a stale note or archive it; the old version is always kept |
 | `send_message` / `check_inbox` | Message an agent by name, `leader` or `everyone`, and read replies |
 
 Claude is set up for code and SVG, and ChatGPT for code, images and GIFs. The hub tells every agent to send work to whichever one fits.

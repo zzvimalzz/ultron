@@ -1,7 +1,7 @@
 import { esc, on } from '../lib/dom.js';
 import { brandSVG } from '../lib/mascots.js';
-import { ICONS, button, onSegment, onToggle, options, segmented, toggle } from '../lib/ui.js';
-import { api, state, saveConfig } from '../lib/state.js';
+import { ICONS, button, errorText, onSegment, onSelect, onToggle, options, segmented, select, toast, toggle } from '../lib/ui.js';
+import { api, state, loadModels, saveConfig } from '../lib/state.js';
 
 const THEMES = options([['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]);
 
@@ -9,6 +9,23 @@ let root;
 let info = { version: '', userData: '' };
 
 const row = (title, control) => `<div class="set-row"><div class="t">${title}</div>${control}</div>`;
+
+// The curator needs an account that can run models, and that account's own model list.
+function memoryRows(memory) {
+  const eligible = state.config.accounts.filter(a => state.overview[a.id]?.eligible);
+  const models = state.models[memory.curator.account] || [];
+  return [
+    row('Memory folder', `<div class="input-row"><input class="input" id="sMemory" style="width:260px" readonly value="${esc(memory.dir)}" placeholder="Default (.ultron\\memory)" aria-label="Memory folder">`
+      + `${memory.dir ? button('Reset', { kind: 'ghost', attrs: 'data-memory="reset"' }) : ''}${button('Browse', { icon: ICONS.folder, attrs: 'data-memory="pick"' })}</div>`),
+    row('Keep memory tidy', toggle('tidy', memory.tidy, 'Keep memory tidy')),
+    ...(memory.tidy ? [
+      row('Tidy with', select('curatorAccount', eligible.map(a => ({ value: a.id, label: a.name })), memory.curator.account)),
+      row('Model', select('curatorModel', models.map(m => ({ value: m.id, label: m.label, hint: m.description })), memory.curator.model)),
+    ] : []),
+  ];
+}
+
+const saveMemory = patch => saveConfig({ memory: { ...state.config.memory, ...patch } });
 
 export function render() {
   const cfg = state.config;
@@ -21,10 +38,7 @@ export function render() {
         row('Appearance', segmented('theme', THEMES, cfg.theme)),
         row('Minimize after opening an account', toggle('minimize', cfg.closeOnLaunch, 'Minimize after opening an account')),
       ])}
-      ${group('Memory', [
-        row('Shared memory folder', `<div class="input-row"><input class="input" id="sMemory" style="width:260px" readonly value="${esc(cfg.crew.memoryDir)}" placeholder="Default (.ultron\\memory)" aria-label="Shared memory folder">`
-          + `${cfg.crew.memoryDir ? button('Reset', { kind: 'ghost', attrs: 'data-memory="reset"' }) : ''}${button('Browse', { icon: ICONS.folder, attrs: 'data-memory="pick"' })}</div>`),
-      ])}
+      ${group('Memory', memoryRows(cfg.memory))}
       ${group('Data', [row('Ultron data', button('Open folder', { icon: ICONS.folder, attrs: 'data-open-data' }))])}
       ${group('About', [`<div class="about"><span class="brand-mark lg">${brandSVG(30)}</span><span>Ultron ${esc(info.version)}</span></div>`])}
     </div>`;
@@ -42,9 +56,30 @@ export function mount(el) {
   onToggle(root, 'minimize', async value => { await saveConfig({ closeOnLaunch: value }); render(); });
   on(root, 'click', '[data-open-data]', () => api.openPath(info.userData));
   on(root, 'click', '[data-memory]', async btn => {
-    const memoryDir = btn.dataset.memory === 'pick' ? await api.pickFolder() : '';
-    if (memoryDir === null) return;
-    await saveConfig({ crew: { ...state.config.crew, memoryDir } });
+    const dir = btn.dataset.memory === 'pick' ? await api.pickFolder() : '';
+    if (dir === null) return;
+    try {
+      const created = await api.memory.setDir(dir);
+      state.config = await api.getConfig();
+      toast(created ? 'Vault ready' : 'Using existing vault');
+    } catch (err) {
+      toast(errorText(err), { kind: 'error' });
+    }
     render();
+  });
+  onToggle(root, 'tidy', async tidy => {
+    const first = state.config.accounts.find(a => state.overview[a.id]?.eligible);
+    const account = state.config.memory.curator.account || first?.id || '';
+    if (account) await loadModels(account);
+    await saveMemory({ tidy, curator: { ...state.config.memory.curator, account } });
+    render();
+  });
+  onSelect(root, 'curatorAccount', async account => {
+    await loadModels(account);
+    await saveMemory({ curator: { account, model: '' } });
+    render();
+  });
+  onSelect(root, 'curatorModel', async model => {
+    await saveMemory({ curator: { ...state.config.memory.curator, model } });
   });
 }

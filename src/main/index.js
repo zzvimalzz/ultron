@@ -11,6 +11,9 @@ const { connectAgents } = require('./agents');
 const crew = require('./crew');
 const { createDetection } = require('./detect');
 const { ROLES } = require('../hub/roles');
+const memory = require('../hub/memory');
+const { MEMORY_DIR, recentEvents } = require('../hub/files');
+const { createCurator } = require('./curator');
 
 const LIVE_INTERVAL_MS = 4000;
 const MICA = process.platform === 'win32' && Number(os.release().split('.')[2]) >= 22000;
@@ -25,7 +28,9 @@ let win;
 let store;
 let usage;
 let detection;
+let curator;
 
+const vaultDir = () => store.get().memory.dir || MEMORY_DIR;
 const usageAccounts = () => store.get().accounts.map(a => ({ ...a, realDataDir: resolveDataDir(a.dataDir) }));
 
 function themeColors() {
@@ -129,15 +134,28 @@ function registerIpc() {
   });
   ipcMain.handle('crew:map', async () => crew.crewMap(store.get(), await overview(), usage.sessions(usageAccounts())));
   ipcMain.handle('crew:connect', (_e, connected) => {
-    connectAgents(store.get().accounts, connected);
+    connectAgents(store.get().accounts, connected, vaultDir());
     return store.update({ crew: { ...store.get().crew, connected } });
   });
+  ipcMain.handle('memory:setDir', (_e, dir) => {
+    const config = store.update({ memory: { ...store.get().memory, dir } });
+    const created = memory.ensureVault(vaultDir());
+    if (config.crew.connected) connectAgents(config.accounts, true, vaultDir());
+    return created;
+  });
+  ipcMain.handle('memory:search', (_e, query) => memory.recall(vaultDir(), query, ''));
+  ipcMain.handle('memory:pending', () => ({ ...memory.pending(vaultDir()), reviewed: memory.lastReviewed(vaultDir()) }));
+  ipcMain.handle('memory:confirm', (_e, item) => memory.confirm(vaultDir(), item));
+  ipcMain.handle('memory:reject', (_e, item) => memory.reject(vaultDir(), item));
+  ipcMain.handle('memory:keep', (_e, item, section) => memory.keep(vaultDir(), item, section));
+  ipcMain.handle('memory:drop', (_e, item) => memory.drop(vaultDir(), item));
+  ipcMain.handle('memory:recent', () => recentEvents(Date.now() - 7 * 24 * 3600 * 1000).filter(e => e.type === 'memory').slice(-40).reverse());
   ipcMain.handle('usage:query', (_e, options) => usage.query(usageAccounts(), options));
   ipcMain.handle('dialog:pickFolder', async () => {
     const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0];
   });
-  ipcMain.handle('app:info', () => ({ version: app.getVersion(), userData: app.getPath('userData'), roles: ROLES }));
+  ipcMain.handle('app:info', () => ({ version: app.getVersion(), userData: app.getPath('userData'), roles: ROLES, sections: memory.MEMORY_SECTIONS }));
   ipcMain.handle('app:openPath', (_e, p) => shell.openPath(p));
 }
 
@@ -156,8 +174,14 @@ app.whenReady().then(async () => {
   nativeTheme.on('updated', applyTheme);
   // Re-registering keeps the hub's path right after Ultron moves or updates.
   if (store.get().crew.connected) {
-    try { connectAgents(store.get().accounts, true); } catch (err) { console.error('Connecting agents failed:', err.message); }
+    try { connectAgents(store.get().accounts, true, vaultDir()); } catch (err) { console.error('Connecting agents failed:', err.message); }
   }
+  memory.ensureVault(vaultDir());
+  curator = createCurator({
+    store, usage, vault: vaultDir, accounts: usageAccounts, eligible: id => { const a = store.get().accounts.find(x => x.id === id); return crew.eligible(a, detection.tierOf(a)); },
+    onChange: () => { if (win && !win.isDestroyed()) win.webContents.send('live'); },
+  });
+  curator.start();
   registerIpc();
   createWindow();
   win.once('ready-to-show', detection.start);

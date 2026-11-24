@@ -9,6 +9,7 @@ const HUB_DIR = path.join(os.homedir(), '.ultron');
 const CREW_FILE = path.join(HUB_DIR, 'crew.json');
 const SESSIONS_FILE = path.join(HUB_DIR, 'sessions.json');
 const EVENTS_FILE = path.join(HUB_DIR, 'events.jsonl');
+const MEMORY_DIR = path.join(HUB_DIR, 'memory');
 
 function readJson(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
@@ -19,6 +20,11 @@ function writeJson(file, data) {
   const tmp = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
   fs.renameSync(tmp, file);
+}
+
+function appendEvent(event) {
+  fs.mkdirSync(HUB_DIR, { recursive: true });
+  fs.appendFileSync(EVENTS_FILE, `${JSON.stringify({ t: Date.now(), ...event })}\n`);
 }
 
 // Events are append-only; only the recent tail matters, so at most the last `bytes` are parsed.
@@ -40,4 +46,4 @@ function recentEvents(since, bytes = 256 * 1024) {
   }
 }
 
-module.exports = { HUB_DIR, CREW_FILE, SESSIONS_FILE, EVENTS_FILE, readJson, writeJson, recentEvents };
+module.exports = { HUB_DIR, MEMORY_DIR, CREW_FILE, SESSIONS_FILE, EVENTS_FILE, readJson, writeJson, appendEvent, recentEvents };

@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { projectName } = require('./usage/aggregate');
 const { homeOf } = require('../hub/cli');
-const { HUB_DIR, CREW_FILE, SESSIONS_FILE, EVENTS_FILE, readJson, writeJson, recentEvents } = require('../hub/files');
+const { MEMORY_DIR, CREW_FILE, SESSIONS_FILE, EVENTS_FILE, readJson, writeJson, recentEvents } = require('../hub/files');
 
 const FEED_MS = 24 * 3600 * 1000;
 const norm = p => (p ? path.resolve(p).toLowerCase() : '');
@@ -31,7 +31,7 @@ let published = '';
 function publish(config, overview, sessions) {
   const crew = {
     leader: leaderId(config),
-    memoryDir: config.crew.memoryDir,
+    memoryDir: config.memory.dir || MEMORY_DIR,
     agents: config.accounts.map(a => ({ ...agentOf(a, overview), home: homeOf(a) })),
   };
   const active = sessions.filter(s => !s.parent).map(s => ({ agent: s.account, provider: s.provider, cwd: s.cwd, last: s.lastActivity }));
@@ -51,7 +51,7 @@ function crewMap(config, overview, sessions) {
   const fallback = provider => config.accounts.find(a => a.provider === provider)?.id || 'other';
   return {
     connected: config.crew.connected,
-    memoryDir: config.crew.memoryDir || path.join(HUB_DIR, 'memory'),
+    memoryDir: config.memory.dir || MEMORY_DIR,
     leader: leaderId(config),
     agents: config.accounts.map(a => ({ ...agentOf(a, overview), color: a.color, mascot: a.mascot })),
     sessions: sessions.map(s => ({

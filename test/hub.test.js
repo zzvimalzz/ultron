@@ -53,15 +53,22 @@ test('hub shares memory and routes messages between agents', async () => {
     const init = await claude.call('initialize', { protocolVersion: '2025-06-18' });
     assert.match(init.result.instructions, /The leader is Claude 1/);
     const { tools } = (await claude.call('tools/list')).result;
-    assert.deepStrictEqual(tools.map(t => t.name), ['crew', 'recall', 'remember', 'send_message', 'check_inbox']);
+    assert.deepStrictEqual(tools.map(t => t.name), ['crew', 'context', 'recall', 'remember', 'update', 'forget', 'send_message', 'check_inbox']);
 
     const crewText = (await claude.tool('crew')).content[0].text;
     assert.match(crewText, /Claude 2 \(you\): paid · default · roles: code, svg · idle/);
     assert.match(crewText, /ChatGPT \(not in crew: free plan\): free · gpt-x\/high · roles: code, images/);
     assert.doesNotMatch(init.result.instructions, /Image and GIF/);
     assert.match(init.result.instructions, /Use the crew tool/);
-    await claude.tool('remember', { title: 'Release process', text: 'Tag v* to publish the installer.' });
+    assert.ok(init.result.instructions.includes(path.join(home, '.ultron', 'memory')));
+    const noteText = 'Tag v* to publish the installer.';
+    assert.match((await claude.tool('remember', { kind: 'session', title: 'Release process', text: noteText })).content[0].text, /Saved to sessions\//);
     assert.match((await chatgpt.tool('recall', { query: 'installer tag' })).content[0].text, /Release process/);
+    assert.match((await claude.tool('context')).content[0].text, /# Memory/);
+    assert.ok((await claude.tool('remember', { kind: 'fact', text: 'password: hunter2' })).isError);
+    await claude.tool('remember', { kind: 'area', title: 'Garden', text: 'Water the beds.' });
+    await claude.tool('update', { file: 'areas/garden.md', text: '# Garden\n\nWater daily.\n' });
+    await claude.tool('forget', { file: 'areas/garden.md' });
 
     assert.ok((await claude.tool('send_message', { to: 'nobody', text: 'hi' })).isError);
     await claude.tool('send_message', { to: 'ChatGPT', text: 'Please draw a GIF of the mascot.' });
@@ -69,8 +76,12 @@ test('hub shares memory and routes messages between agents', async () => {
     assert.match((await chatgpt.tool('check_inbox')).content[0].text, /No new messages/);
 
     const events = fs.readFileSync(path.join(home, '.ultron', 'events.jsonl'), 'utf8').trim().split('\n').map(l => JSON.parse(l));
-    assert.deepStrictEqual(events.map(e => e.type), ['memory', 'memory', 'message']);
-    assert.strictEqual(events[2].from.agent, 'c2');
+    assert.deepStrictEqual(events.map(e => `${e.type}:${e.action || ''}`), [
+      'memory:saved', 'memory:recalled', 'memory:context', 'memory:saved', 'memory:updated', 'memory:archived', 'message:',
+    ]);
+    assert.deepStrictEqual(events.filter(e => e.type === 'memory').map(e => e.title), ['session: Release process', 'installer tag', 'memory', 'area: Garden', 'Garden', 'Garden']);
+    assert.ok(!JSON.stringify(events).includes(noteText));
+    assert.strictEqual(events[6].from.agent, 'c2');
   } finally {
     claude.stop();
     chatgpt.stop();

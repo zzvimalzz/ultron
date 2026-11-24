@@ -208,4 +208,4 @@ async function detect(account, options) {
   }
 }
 
-module.exports = { CLIS, exists, which, homeOf, cliEnv, signedIn, spawnCli, modelArgs, tierOf, parseClaudeInit, parseCodexReplies, detect };
+module.exports = { CLIS, exists, which, homeOf, cliEnv, signedIn, spawnCli, killTree, modelArgs, tierOf, parseClaudeInit, parseCodexReplies, detect };
