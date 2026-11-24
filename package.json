@@ -1,0 +1,23 @@
+{
+  "name": "ultron",
+  "productName": "Ultron",
+  "version": "1.1.0",
+  "description": "Launcher and usage dashboard for Claude and ChatGPT desktop accounts",
+  "main": "src/main/index.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test \"test/*.test.js\"",
+    "lint:personal": "node tools/check-personal.js",
+    "icon": "python tools/make_icon.py",
+    "snapshot": "electron tools/snapshot.js",
+    "package": "electron-packager . Ultron --platform=win32 --arch=x64 --icon=build/ultron.ico --out=dist --overwrite --asar --prune=true --ignore=^/dist --ignore=^/tools --ignore=^/test --ignore=^/\\.claude --ignore=AGENTS\\.md --ignore=CLAUDE\\.md --win32metadata.FileDescription=Ultron --win32metadata.ProductName=Ultron"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.4.4",
+    "electron": "^39.2.3"
+  },
+  "allowScripts": {
+    "electron@39.2.3": true
+  }
+}

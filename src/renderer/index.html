@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; script-src 'self'">
+  <title>Ultron</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand drag">
+        <span class="brand-mark" id="brandMark"></span>
+        <span class="brand-name">Ultron</span>
+      </div>
+      <nav class="nav">
+        <button class="nav-item active" data-page="accounts">
+          <svg viewBox="0 0 20 20"><rect x="3" y="3" width="6" height="6" rx="1.6"/><rect x="11" y="3" width="6" height="6" rx="1.6"/><rect x="3" y="11" width="6" height="6" rx="1.6"/><rect x="11" y="11" width="6" height="6" rx="1.6"/></svg>
+          <span>Accounts</span><kbd>Ctrl 1</kbd>
+        </button>
+        <button class="nav-item" data-page="usage">
+          <svg viewBox="0 0 20 20"><path d="M4 16V9M8 16V4M12 16v-5M16 16V7"/></svg>
+          <span>Usage</span><kbd>Ctrl 2</kbd>
+        </button>
+        <button class="nav-item" data-page="settings">
+          <svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="2.6"/><path d="M10 2.5v2M10 15.5v2M17.5 10h-2M4.5 10h-2M15.3 4.7l-1.4 1.4M6.1 13.9l-1.4 1.4M15.3 15.3l-1.4-1.4M6.1 6.1L4.7 4.7"/></svg>
+          <span>Settings</span><kbd>Ctrl ,</kbd>
+        </button>
+      </nav>
+      <div class="sidebar-foot" id="sidebarFoot"></div>
+    </aside>
+
+    <main class="main">
+      <div class="titlebar drag"></div>
+      <div class="scroller" id="scroller">
+        <section class="page active" id="page-accounts"></section>
+        <section class="page" id="page-usage"></section>
+        <section class="page" id="page-settings"></section>
+      </div>
+    </main>
+  </div>
+
+  <div class="tooltip" id="tooltip" role="tooltip"></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <div class="modal-backdrop" id="modal" hidden></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

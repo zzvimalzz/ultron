@@ -1,0 +1,44 @@
+'use strict';
+const os = require('os');
+const path = require('path');
+const { createScanner } = require('./scan');
+const { buildContext } = require('./attribution');
+const { aggregate } = require('./aggregate');
+
+const HOMES = {
+  claude: { home: path.join(os.homedir(), '.claude'), transcripts: 'projects' },
+  chatgpt: { home: path.join(os.homedir(), '.codex'), transcripts: 'sessions' },
+};
+
+// Shared homes hold every account's sessions; an account with its own CLI home owns everything in it.
+function transcriptSources(accounts) {
+  const shared = Object.entries(HOMES).map(([provider, h]) => ({ provider, root: path.join(h.home, h.transcripts), account: null }));
+  const own = accounts.filter(a => a.cliHome)
+    .map(a => ({ provider: a.provider, root: path.join(a.cliHome, HOMES[a.provider].transcripts), account: a.id }));
+  return [...own, ...shared.filter(s => !own.some(o => path.resolve(o.root) === path.resolve(s.root)))];
+}
+
+function createUsage(cacheFile) {
+  const scanner = createScanner(cacheFile);
+  let ctx = null;
+  let busy = null;
+
+  async function refresh(accounts) {
+    if (busy) return busy;
+    busy = (async () => {
+      const changed = await scanner.refresh(transcriptSources(accounts));
+      if (changed || !ctx) ctx = await buildContext(accounts);
+      return changed;
+    })();
+    try { return await busy; } finally { busy = null; }
+  }
+
+  async function query(accounts, options) {
+    if (!ctx) await refresh(accounts);
+    return aggregate(scanner.records(), ctx, accounts, options);
+  }
+
+  return { refresh, query, ready: () => Boolean(ctx) };
+}
+
+module.exports = { createUsage };

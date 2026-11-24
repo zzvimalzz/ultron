@@ -1,0 +1,19 @@
+# Dependencies and build output
+node_modules/
+dist/
+*.log
+
+# AI assistant instructions and local tooling
+AGENTS.md
+CLAUDE.md
+.claude/
+.codex/
+.cursor/
+.github/copilot-instructions.md
+
+# Editor and OS files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.env
