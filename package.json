@@ -8,7 +8,7 @@
   "private": true,
   "scripts": {
     "start": "electron .",
-    "test": "node --test \"test/*.test.js\"",
+    "test": "node --test --test-timeout=60000 \"test/*.test.js\"",
     "lint:personal": "node tools/check-personal.js",
     "icon": "python tools/make_icon.py",
     "snapshot": "electron tools/snapshot.js",
