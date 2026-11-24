@@ -1,7 +1,7 @@
 import { $, esc, on } from '../lib/dom.js';
 import * as fmt from '../lib/format.js';
 import { colorHex, mascotSVG } from '../lib/mascots.js';
-import { ICONS, toast } from '../lib/ui.js';
+import { ICONS, phase, toast } from '../lib/ui.js';
 import { api, state, accountById } from '../lib/state.js';
 import { openEditor } from './editor.js';
 
@@ -20,13 +20,15 @@ function card(account, index) {
   const target = (state.targets[account.provider] || []).find(t => t.id === account.openWith);
   const meta = (label, value) => `<div><div class="k">${label}</div><div class="v">${value}</div></div>`;
   const counted = live.tokens !== undefined;
+  const status = live.working ? ['busy', 'Working'] : live.running ? ['on', 'Running'] : ['', 'Not running'];
   return `
-    <div class="acct" role="button" tabindex="0" data-account="${account.id}" aria-label="Open ${esc(account.name)}">
+    <div class="acct ${live.working ? 'working' : ''}" role="button" tabindex="0" data-account="${account.id}" aria-label="Open ${esc(account.name)}" style="${phase(index)}">
       <div class="acct-hero" style="--account:${hex}">
-        <span class="status ${live.running ? 'on' : ''}"><i></i>${live.running ? 'Running' : 'Not running'}</span>
+        <span class="status ${status[0]}"><i></i>${status[1]}</span>
         <button class="icon-btn acct-edit" data-edit="${account.id}" aria-label="Customize ${esc(account.name)}">${ICONS.edit}</button>
         <span class="floor"></span>
-        <span class="mascot-wrap" style="animation-delay:-${index * 0.7}s">${mascotSVG(account, 128)}</span>
+        <span class="mascot-wrap">${mascotSVG(account, 128)}</span>
+        ${live.working ? '<span class="think"><i></i><i></i><i></i></span>' : ''}
         ${index < 9 ? `<span class="acct-key">${index + 1}</span>` : ''}
       </div>
       <div class="acct-body">
@@ -57,7 +59,10 @@ export function render() {
       <h1>${fmt.greeting()}${config.userName ? `, ${esc(config.userName)}` : ''}</h1>
       <button class="btn" data-add>${ICONS.plus}Add account</button>
     </div>
-    <div class="accounts-grid">${config.accounts.map(card).join('')}</div>`;
+    <div class="accounts-grid">${config.accounts.length ? config.accounts.map(card).join('')
+      : `<button class="acct-empty" data-add>${mascotSVG({ color: 2, mascot: { eyes: 'happy' } }, 72)}<span>Add your first account</span></button>`}</div>`;
+  const menu = $('.menu', root);
+  if (menu && menu.getBoundingClientRect().bottom > root.closest('.scroller').getBoundingClientRect().bottom) menu.classList.add('up');
 }
 
 export async function launch(id, targetId) {

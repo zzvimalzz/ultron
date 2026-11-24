@@ -1,12 +1,13 @@
 'use strict';
 const path = require('path');
 const { app, BrowserWindow, ipcMain, nativeTheme, shell, dialog } = require('electron');
-const { createStore, newAccount } = require('./config');
+const { createStore, blankAccount } = require('./config');
 const { resolveDataDir, isRunning, lastActivityAt } = require('./profiles');
-const { availableTargets, openAccount } = require('./targets');
+const { PROVIDERS, isInstalled, availableTargets, openAccount } = require('./targets');
 const { createUsage } = require('./usage');
 
 const LIVE_INTERVAL_MS = 4000;
+const WORKING_MS = 60000;
 const THEME = { dark: { bg: '#111110', fg: '#c9c8c2' }, light: { bg: '#f6f5f2', fg: '#3b3a37' } };
 
 app.setAppUserModelId('app.ultron.launcher');
@@ -56,8 +57,10 @@ async function overview() {
   return Object.fromEntries(accounts.map(a => {
     const running = isRunning(a.dataDir);
     const used = day && (day.perAccount[a.id] || { total: 0, activeMs: 0 });
-    const lastOpened = running ? Date.now() : Math.max(a.lastOpened || 0, lastActivityAt(a.dataDir), day ? day.lastActivity[a.id] || 0 : 0);
-    return [a.id, { running, lastOpened, tokens: used?.total, activeMs: used?.activeMs }];
+    const lastWork = day ? day.lastActivity[a.id] || 0 : 0;
+    const working = Date.now() - lastWork < WORKING_MS;
+    const lastOpened = running ? Date.now() : Math.max(a.lastOpened || 0, lastActivityAt(a.dataDir), lastWork);
+    return [a.id, { running, working, lastOpened, tokens: used?.total, activeMs: used?.activeMs }];
   }));
 }
 
@@ -66,9 +69,8 @@ async function overview() {
 function startLiveUpdates() {
   let lastStatus = '';
   const tick = async () => {
-    const accounts = store.get().accounts;
     const changed = await usage.refresh(usageAccounts());
-    const status = accounts.map(a => isRunning(a.dataDir)).join();
+    const status = Object.values(await overview()).map(o => `${o.running}${o.working}`).join();
     if ((changed || status !== lastStatus) && win && !win.isDestroyed()) win.webContents.send('live');
     lastStatus = status;
     setTimeout(tick, LIVE_INTERVAL_MS);
@@ -85,8 +87,8 @@ function registerIpc() {
   });
   ipcMain.handle('accounts:overview', overview);
   ipcMain.handle('accounts:targets', (_e, provider) => availableTargets(provider));
-  ipcMain.handle('accounts:blank', (_e, provider) =>
-    newAccount(provider, store.get().accounts.length, { mascot: { accessory: 'none', eyes: 'happy' } }));
+  ipcMain.handle('accounts:blank', (_e, provider, ownProfile) => blankAccount(provider, store.get().accounts, ownProfile));
+  ipcMain.handle('accounts:downloadUrl', (_e, provider) => (isInstalled(provider) ? null : PROVIDERS[provider].download));
   ipcMain.handle('accounts:open', async (_e, id, targetId) => {
     const account = store.get().accounts.find(a => a.id === id);
     const used = await openAccount(account, targetId || account.openWith);

@@ -69,6 +69,9 @@ export function openModal(html) {
 
 export const modalOpen = () => !$('#modal').hidden;
 
+// Re-rendered markup restarts CSS animations; a delay tied to the clock keeps each loop continuous.
+export const phase = (offset = 0) => `--phase:-${Math.round(performance.now() + offset * 700)}ms`;
+
 export const ICONS = {
   arrow: '<svg viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></svg>',
   chevron: '<svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg>',

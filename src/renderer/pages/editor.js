@@ -13,7 +13,20 @@ const folderField = (id, label, value) =>
   `<div class="field"><label for="${id}">${label}</label><div class="input-row"><input class="input" id="${id}" value="${esc(value)}" spellcheck="false">`
   + `<button class="btn" data-pick="${id}">${ICONS.folder}Browse</button></div></div>`;
 
-function view(draft, isNew) {
+const ownProfile = draft => /--user-data-dir=/.test(draft.args || '');
+
+function signInFields(draft, download) {
+  const name = draft.provider === 'claude' ? 'Claude' : 'ChatGPT';
+  const missing = download ? `<p class="hint">${name} Desktop isn't installed. <a href="${download}" target="_blank">Download it</a></p>` : '';
+  if (draft.provider !== 'claude') return missing;
+  const mine = ownProfile(draft);
+  return `<div class="field"><label>Sign-in</label><div class="seg">`
+    + `<button class="${mine ? 'on' : ''}" data-profile="own">New login</button>`
+    + `<button class="${mine ? '' : 'on'}" data-profile="shared">Current login</button></div>`
+    + `<p class="hint">${mine ? 'Opens Claude with its own sign-in, so you can log in to another account.' : 'Uses the account already signed in to Claude Desktop.'}</p>${missing}</div>`;
+}
+
+function view(draft, isNew, download) {
   const choice = (list, key, preview) => `<div class="chips">${list.map(x => `<button class="chip ${draft.mascot[key] === x.id ? 'on' : ''}" data-${key}="${x.id}">`
     + `${mascotSVG(preview(x.id), 30)}${x.label}</button>`).join('')}</div>`;
   const hex = colorHex(draft.color);
@@ -33,12 +46,12 @@ function view(draft, isNew) {
           </div>
         </div>
         <div>
-          ${isNew ? `<div class="field"><label>Service</label><div class="seg" data-provider>${['claude', 'chatgpt'].map(p => `<button class="${draft.provider === p ? 'on' : ''}" data-provider-value="${p}">${p === 'claude' ? 'Claude' : 'ChatGPT'}</button>`).join('')}</div></div>` : ''}
+          ${isNew ? `<div class="field"><label>Service</label><div class="seg" data-provider>${['claude', 'chatgpt'].map(p => `<button class="${draft.provider === p ? 'on' : ''}" data-provider-value="${p}">${p === 'claude' ? 'Claude' : 'ChatGPT'}</button>`).join('')}</div></div>${signInFields(draft, download)}` : ''}
           ${field('fName', 'Name', draft.name, 'maxlength="32"')}
           ${field('fSub', 'Label', draft.subtitle, 'maxlength="40" placeholder="Optional"')}
           <div class="field"><label>Accessory</label>${choice(ACCESSORIES, 'accessory', id => ({ ...draft, mascot: { ...draft.mascot, accessory: id } }))}</div>
           <div class="field"><label>Eyes</label>${choice(EYES, 'eyes', id => ({ ...draft, mascot: { accessory: 'none', eyes: id } }))}</div>
-          <details class="adv" ${isNew ? 'open' : ''}>
+          <details class="adv">
             <summary>Advanced</summary>
             ${draft.provider === 'claude' ? field('fArgs', 'Desktop app arguments', draft.args, 'placeholder="--user-data-dir=&quot;…&quot;"') : ''}
             ${folderField('fData', 'Profile folder', draft.dataDir)}
@@ -58,7 +71,9 @@ function view(draft, isNew) {
 export async function openEditor(id) {
   const isNew = !id;
   let draft = isNew ? await api.blankAccount('claude') : structuredClone(accountById(id));
+  let download = isNew ? await api.downloadUrl('claude') : null;
   const modal = $('#modal');
+  const draw = () => { modal.innerHTML = view(draft, isNew, download); };
 
   const readFields = () => {
     const val = sel => ($(sel, modal) ? $(sel, modal).value.trim() : undefined);
@@ -70,20 +85,25 @@ export async function openEditor(id) {
     const custom = /--user-data-dir=("?)([^"]+)\1/.exec(draft.args || '');
     if (custom && !draft.dataDir) draft.dataDir = custom[2];
   };
-  const redraw = () => { readFields(); modal.innerHTML = view(draft, isNew); };
+  const redraw = () => { readFields(); draw(); };
+  const replaceDraft = async (provider, own) => {
+    readFields();
+    const { name, subtitle, color, mascot } = draft;
+    const fresh = await api.blankAccount(provider, own);
+    draft = provider === draft.provider ? { ...fresh, name, subtitle, color, mascot } : fresh;
+    download = await api.downloadUrl(provider);
+    draw();
+  };
 
-  const close = openModal(view(draft, isNew));
+  const close = openModal(view(draft, isNew, download));
   modal.onclick = async e => {
     const t = e.target.closest('button') || e.target;
     if (e.target === modal || t.closest('[data-close]')) return close();
     if (t.dataset.color) { draft.color = Number(t.dataset.color); return redraw(); }
     if (t.dataset.accessory) { draft.mascot.accessory = t.dataset.accessory; return redraw(); }
     if (t.dataset.eyes) { draft.mascot.eyes = t.dataset.eyes; return redraw(); }
-    if (t.dataset.providerValue) {
-      draft = await api.blankAccount(t.dataset.providerValue);
-      modal.innerHTML = view(draft, isNew);
-      return;
-    }
+    if (t.dataset.providerValue) return replaceDraft(t.dataset.providerValue);
+    if (t.dataset.profile) return replaceDraft('claude', t.dataset.profile === 'own');
     if (t.dataset.pick) {
       const folder = await api.pickFolder();
       if (folder) $(`#${t.dataset.pick}`, modal).value = folder;
@@ -95,7 +115,7 @@ export async function openEditor(id) {
       await saveConfig({ accounts });
       close();
       toast(isNew ? `${draft.name} added` : 'Saved', { icon: mascotSVG(draft, 22) });
-      onSaved();
+      onSaved(isNew && ownProfile(draft) ? draft.id : null);
       return;
     }
     if (t.matches('[data-remove]')) {

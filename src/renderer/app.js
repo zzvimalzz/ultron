@@ -1,6 +1,6 @@
 import { $, $$, esc } from './lib/dom.js';
 import { brandSVG, colorHex, mascotSVG } from './lib/mascots.js';
-import { installTooltips, modalOpen } from './lib/ui.js';
+import { installTooltips, modalOpen, phase } from './lib/ui.js';
 import { api, state } from './lib/state.js';
 import * as accounts from './pages/accounts.js';
 import * as usage from './pages/usage.js';
@@ -28,12 +28,15 @@ function show(page) {
 }
 
 function renderSidebar() {
-  $('#sidebarFoot').innerHTML = state.config.accounts.map(a => `
-    <div class="foot-row" title="${esc(a.name)}">
+  $('#sidebarFoot').innerHTML = state.config.accounts.map((a, i) => {
+    const live = state.overview[a.id] || {};
+    return `
+    <div class="foot-row" title="${esc(a.name)}" style="${phase(i)}">
       <span class="mini" style="--account:${colorHex(a.color)}">${mascotSVG(a, 18)}</span>
       <span class="name">${esc(a.name)}</span>
-      <span class="dot ${state.overview[a.id]?.running ? 'on' : ''}"></span>
-    </div>`).join('');
+      <span class="dot ${live.working ? 'busy' : live.running ? 'on' : ''}"></span>
+    </div>`;
+  }).join('');
 }
 
 async function refreshLive() {
@@ -65,7 +68,8 @@ async function boot() {
   document.addEventListener('keydown', onKey);
   document.addEventListener('themechange', () => { applyTheme(); if (state.usageData) usage.render(); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (current === 'usage') usage.render(); });
-  setEditorListener(() => { renderSidebar(); PAGES[current].render(); });
+  // A new login opens straight away so the user can sign in.
+  setEditorListener(openId => { renderSidebar(); PAGES[current].render(); if (openId) accounts.launch(openId); });
   installTooltips();
   accounts.render();
   await accounts.loadTargets();

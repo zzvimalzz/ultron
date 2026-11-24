@@ -8,6 +8,23 @@ A small Windows launcher for Claude and ChatGPT desktop accounts, with a local u
 
 Usage covers Claude Code and Codex sessions stored on this PC. Chat conversations aren't stored locally, so they aren't counted.
 
+## Install
+
+1. Open [Releases](../../releases/latest) and download `Ultron-Setup-<version>.exe`.
+2. Run it. Ultron installs for your user only (no admin needed) and adds Desktop and Start Menu shortcuts.
+3. If Windows shows "Windows protected your PC", choose **More info → Run anyway**. The installer isn't code-signed.
+
+On first launch Ultron adds the Claude and ChatGPT desktop apps it finds. To add another Claude account, choose **Add account → New login**: Ultron opens Claude with a separate sign-in for it.
+
+## Release
+
+Push a version tag and GitHub Actions builds the installer and publishes the release:
+
+```powershell
+git tag v1.2.0
+git push origin v1.2.0
+```
+
 ## Development
 
 Requires Node.js 22 or later. Keep the checkout on a short path: Windows' 260-character limit breaks Electron otherwise.
@@ -18,7 +35,7 @@ npm start              # run the app
 npm test               # unit tests
 npm run lint:personal  # fail on personal details in the repo
 npm run icon           # regenerate build/ultron.ico and build/ultron.png (Python + Pillow)
-npm run package        # build dist/Ultron-win32-x64
+npm run package        # build dist/Ultron-Setup-<version>.exe
 ```
 
 | Path | Contents |

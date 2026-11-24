@@ -1,8 +1,9 @@
 {
   "name": "ultron",
   "productName": "Ultron",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Launcher and usage dashboard for Claude and ChatGPT desktop accounts",
+  "author": "Ultron",
   "main": "src/main/index.js",
   "private": true,
   "scripts": {
@@ -11,13 +12,39 @@
     "lint:personal": "node tools/check-personal.js",
     "icon": "python tools/make_icon.py",
     "snapshot": "electron tools/snapshot.js",
-    "package": "electron-packager . Ultron --platform=win32 --arch=x64 --icon=build/ultron.ico --out=dist --overwrite --asar --prune=true --ignore=^/dist --ignore=^/tools --ignore=^/test --ignore=^/\\.claude --ignore=AGENTS\\.md --ignore=CLAUDE\\.md --win32metadata.FileDescription=Ultron --win32metadata.ProductName=Ultron"
+    "package": "electron-builder --win --publish never"
   },
   "devDependencies": {
-    "@electron/packager": "^18.4.4",
-    "electron": "^39.2.3"
+    "electron": "^39.2.3",
+    "electron-builder": "^26.18.0"
   },
   "allowScripts": {
     "electron@39.2.3": true
+  },
+  "build": {
+    "appId": "app.ultron.launcher",
+    "productName": "Ultron",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "build/ultron.ico",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/ultron.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "Ultron",
+      "artifactName": "Ultron-Setup-${version}.${ext}"
+    },
+    "electronLanguages": [
+      "en-US",
+      "en-GB"
+    ]
   }
 }

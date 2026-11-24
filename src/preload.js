@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('ultron', {
   overview: invoke('accounts:overview'),
   targets: invoke('accounts:targets'),
   blankAccount: invoke('accounts:blank'),
+  downloadUrl: invoke('accounts:downloadUrl'),
   open: invoke('accounts:open'),
   usage: invoke('usage:query'),
   pickFolder: invoke('dialog:pickFolder'),

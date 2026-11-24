@@ -7,11 +7,15 @@ const { shell } = require('electron');
 const { LOCAL, findPackage } = require('./profiles');
 
 const PROVIDERS = {
-  claude: { web: 'https://claude.ai', homeEnv: 'CLAUDE_CONFIG_DIR', defaultTarget: 'claude-desktop' },
-  chatgpt: { web: 'https://chatgpt.com', homeEnv: 'CODEX_HOME', defaultTarget: 'chatgpt-desktop' },
+  claude: { web: 'https://claude.ai', download: 'https://claude.ai/download', homeEnv: 'CLAUDE_CONFIG_DIR', defaultTarget: 'claude-desktop' },
+  chatgpt: { web: 'https://chatgpt.com', download: 'https://chatgpt.com/download', homeEnv: 'CODEX_HOME', defaultTarget: 'chatgpt-desktop' },
 };
 
-const CLAUDE_ALIAS = path.join(LOCAL, 'Microsoft', 'WindowsApps', 'claude-desktop.exe');
+// Microsoft Store build first, then the standalone installer's location.
+const CLAUDE_EXES = [
+  path.join(LOCAL, 'Microsoft', 'WindowsApps', 'claude-desktop.exe'),
+  path.join(LOCAL, 'AnthropicClaude', 'claude.exe'),
+];
 
 // App execution aliases (WindowsApps\*.exe) can't be stat'ed, only lstat'ed.
 function exists(p) {
@@ -76,7 +80,7 @@ function vscodeExe() {
 
 const TARGETS = [
   { id: 'claude-desktop', label: 'Claude Desktop', provider: 'claude',
-    locate: () => (exists(CLAUDE_ALIAS) ? CLAUDE_ALIAS : null),
+    locate: () => CLAUDE_EXES.find(exists) || null,
     open: (exe, a) => detached(exe, splitArgs(a.args)) },
   { id: 'claude-cli', label: 'Claude Code CLI', provider: 'claude',
     locate: () => which('claude'),
@@ -95,6 +99,8 @@ const TARGETS = [
     open: (_, a) => shell.openExternal(PROVIDERS[a.provider].web) },
 ];
 
+const isInstalled = provider => Boolean(TARGETS.find(t => t.id === PROVIDERS[provider].defaultTarget).locate());
+
 function availableTargets(provider) {
   return TARGETS.filter(t => !t.provider || t.provider === provider)
     .filter(t => t.locate())
@@ -109,4 +115,4 @@ async function openAccount(account, targetId) {
   return target.id;
 }
 
-module.exports = { PROVIDERS, availableTargets, openAccount };
+module.exports = { PROVIDERS, isInstalled, availableTargets, openAccount };

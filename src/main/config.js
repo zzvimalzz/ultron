@@ -1,8 +1,8 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { LOCAL, ROAMING, findPackage, findShortcuts } = require('./profiles');
-const { PROVIDERS } = require('./targets');
+const { LOCAL, ROAMING, findShortcuts, resolveDataDir } = require('./profiles');
+const { PROVIDERS, isInstalled } = require('./targets');
 
 const VERSION = 2;
 
@@ -32,17 +32,34 @@ function account(provider, index, fields) {
   };
 }
 
+const chatgptDataDir = () => path.join(ROAMING, 'Codex', 'web', 'Codex');
+const usesOwnProfile = a => /--user-data-dir=/.test(a.args || '');
+
+function freeClaudeProfile(accounts) {
+  const taken = new Set(accounts.map(a => (a.dataDir || '').toLowerCase()));
+  for (let n = 2; ; n++) {
+    const dir = path.join(LOCAL, 'Claude-Profiles', `Claude${n}`);
+    if (!taken.has(dir.toLowerCase()) && !fs.existsSync(resolveDataDir(dir))) return dir;
+  }
+}
+
+// A new Claude account gets its own profile folder (and so its own sign-in) once the default one is taken.
+function blankAccount(provider, accounts, ownProfile) {
+  const index = accounts.filter(a => a.provider === provider).length;
+  const fields = { mascot: { accessory: 'none', eyes: 'happy' } };
+  if (provider === 'chatgpt') return account(provider, index, { ...fields, dataDir: chatgptDataDir() });
+  ownProfile ??= accounts.some(a => a.provider === 'claude' && !usesOwnProfile(a));
+  const dataDir = ownProfile ? freeClaudeProfile(accounts) : defaultClaudeDataDir();
+  return account(provider, index, { ...fields, dataDir, args: ownProfile ? `--user-data-dir="${dataDir}"` : '' });
+}
+
 async function discoverClaudeAccounts() {
   const shortcuts = (await findShortcuts('claude-desktop.exe')).sort((a, b) => a.name.localeCompare(b.name));
-  if (!shortcuts.length) return [account('claude', 0, { name: 'Claude', dataDir: defaultClaudeDataDir() })];
+  if (!shortcuts.length) return isInstalled('claude') ? [account('claude', 0, { name: 'Claude', dataDir: defaultClaudeDataDir() })] : [];
   return shortcuts.map((s, i) => {
     const custom = /--user-data-dir=("?)([^"]+)\1/.exec(s.args || '');
     return account('claude', i, { name: s.name, args: s.args || '', dataDir: custom ? custom[2] : defaultClaudeDataDir() });
   });
-}
-
-function chatgptAccount(index) {
-  return account('chatgpt', index, { dataDir: path.join(ROAMING, 'Codex', 'web', 'Codex') });
 }
 
 function migrate(config) {
@@ -54,8 +71,8 @@ function migrate(config) {
     delete a.target;
     delete a.pathHints;
   }
-  if (!config.accounts.some(a => a.provider === 'chatgpt') && findPackage('OpenAI.Codex')) {
-    config.accounts.push(chatgptAccount(config.accounts.length));
+  if (!config.accounts.some(a => a.provider === 'chatgpt') && isInstalled('chatgpt')) {
+    config.accounts.push(account('chatgpt', 0, { dataDir: chatgptDataDir() }));
   }
   config.version = VERSION;
   return config;
@@ -87,4 +104,4 @@ function createStore(file) {
   };
 }
 
-module.exports = { createStore, newAccount: account };
+module.exports = { createStore, blankAccount };
