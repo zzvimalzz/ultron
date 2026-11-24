@@ -1,7 +1,7 @@
 {
   "name": "ultron",
   "productName": "Ultron",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Launcher and usage dashboard for Claude and ChatGPT desktop accounts",
   "author": "Ultron",
   "main": "src/main/index.js",
@@ -23,6 +23,11 @@
   },
   "build": {
     "appId": "app.ultron.launcher",
+    "publish": [
+      {
+        "provider": "github"
+      }
+    ],
     "productName": "Ultron",
     "directories": {
       "output": "dist"
@@ -49,5 +54,8 @@
     "asarUnpack": [
       "src/hub/**"
     ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }

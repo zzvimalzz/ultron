@@ -1,3 +1,5 @@
+import { errorText, toast } from './ui.js';
+
 export const api = window.ultron;
 
 export const state = {
@@ -25,4 +27,12 @@ export const accountById = id => state.config.accounts.find(a => a.id === id);
 export async function saveConfig(patch) {
   state.config = await api.updateConfig(patch);
   return state.config;
+}
+
+// Plain words plus the one action that fixes it: a missing app opens setup, a signed-out account starts its sign-in.
+export function toastError(err, accountId) {
+  const text = errorText(err);
+  const action = /isn't installed$/.test(text) ? { label: 'Install', run: () => document.dispatchEvent(new Event('opensetup')) }
+    : text === 'Not signed in' && accountId ? { label: 'Sign in', run: () => api.signIn(accountId, 'cli').catch(toastError) } : null;
+  toast(text, { kind: 'error', action });
 }

@@ -50,7 +50,7 @@ test('a second ChatGPT account opens in the CLI because the desktop app holds on
   const lockOf = (account, id) => availableTargets(account, [first, second]).find(t => t.id === id)?.locked ?? null;
   assert.ok([null, 'ChatGPT Desktop holds one account'].includes(lockOf(second, 'chatgpt-desktop')));
   assert.strictEqual(lockOf(first, 'chatgpt-desktop'), null);
-  await assert.rejects(openAccount(second, 'chatgpt-desktop', [first, second]), /not installed|holds one account/);
+  await assert.rejects(openAccount(second, 'chatgpt-desktop', [first, second]), /isn't installed|holds one account/);
 });
 
 test('spawnCli runs npm shims through cmd.exe and everything else directly', () => {

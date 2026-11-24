@@ -3,7 +3,7 @@
 const fs = require('fs');
 const { clipboard } = require('electron');
 const checkpoint = require('../hub/checkpoint');
-const { CLIS, cliEnv, killTree, which } = require('../hub/cli');
+const { CLIS, cliEnv, killTree, signedIn, which } = require('../hub/cli');
 const hub = require('../hub/tasks');
 const crew = require('./crew');
 const { PROVIDERS, inTerminal, openAccount } = require('./targets');
@@ -24,7 +24,8 @@ function createTasks({ store, isEligible, publishCrew, onQuestion }) {
     const leader = accountOf(crew.leaderId(config));
     if (!leader || !isEligible(leader)) throw new Error('The leader needs a paid plan. Choose another leader.');
     if (!checkpoint.available()) throw new Error('Install Git to enable undo');
-    if (!which(CLIS[leader.provider].command)) throw new Error(`${PROVIDERS[leader.provider].label} CLI is not installed`);
+    if (!which(CLIS[leader.provider].command)) throw new Error(`${PROVIDERS[leader.provider].label} CLI isn't installed`);
+    if (!signedIn(leader)) throw new Error('Not signed in');
     if (!folder || !fs.existsSync(folder)) throw new Error('Choose an existing folder');
     await publishCrew();
 

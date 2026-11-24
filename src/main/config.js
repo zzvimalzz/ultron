@@ -6,7 +6,7 @@ const { PROVIDERS, isInstalled, isLaunchOnly } = require('./targets');
 const { HUB_DIR } = require('../hub/files');
 const { DEFAULT_ROLES } = require('../hub/roles');
 
-const VERSION = 8;
+const VERSION = 9;
 const HOMES_DIR = path.join(HUB_DIR, 'homes');
 const defaultRoles = provider => [...(DEFAULT_ROLES[provider] || [])];
 
@@ -105,6 +105,7 @@ function migrate(config) {
   config.memory ||= { dir: config.crew.memoryDir || '', tidy: false, curator: { account: '', model: '' } };
   delete config.crew.memoryDir;
   config.ultron ||= { lastFolder: '' };
+  config.setupDone ??= config.accounts.length > 0;
   if (!config.accounts.some(a => a.provider === 'chatgpt') && isInstalled('chatgpt')) {
     config.accounts.push(account('chatgpt', 0, { dataDir: chatgptDataDir() }));
   }
@@ -123,7 +124,7 @@ function createStore(file) {
       try {
         config = JSON.parse(fs.readFileSync(file, 'utf8'));
       } catch {
-        config = { theme: 'system', closeOnLaunch: false, userName: '', accounts: await discoverClaudeAccounts() };
+        config = { theme: 'system', closeOnLaunch: false, userName: '', setupDone: false, accounts: await discoverClaudeAccounts() };
       }
       if (config.version !== VERSION) { migrate(config); save(); }
       return config;

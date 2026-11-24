@@ -2,11 +2,20 @@ import { esc, on } from '../lib/dom.js';
 import { brandSVG } from '../lib/mascots.js';
 import { ICONS, button, errorText, onSegment, onSelect, onToggle, options, segmented, select, toast, toggle } from '../lib/ui.js';
 import { api, state, loadModels, saveConfig } from '../lib/state.js';
+import * as setup from './setup.js';
 
 const THEMES = options([['system', 'System'], ['light', 'Light'], ['dark', 'Dark']]);
 
 let root;
 let info = { version: '', userData: '' };
+
+const UPDATE_TEXT = {
+  dev: 'Updates only run in the installed app',
+  ready: 'Update ready · Restart from the sidebar',
+  available: 'Downloading the update…',
+  current: "You're up to date",
+  error: "Couldn't check for updates",
+};
 
 const row = (title, control) => `<div class="set-row"><div class="t">${title}</div>${control}</div>`;
 
@@ -37,10 +46,12 @@ export function render() {
         row('Your name', `<input class="input" id="sName" style="width:220px" value="${esc(cfg.userName || '')}" placeholder="Name" maxlength="24" aria-label="Your name">`),
         row('Appearance', segmented('theme', THEMES, cfg.theme)),
         row('Minimize after opening an account', toggle('minimize', cfg.closeOnLaunch, 'Minimize after opening an account')),
+        row('Setup', button('Run setup again', { attrs: 'data-run-setup' })),
       ])}
       ${group('Memory', memoryRows(cfg.memory))}
       ${group('Data', [row('Ultron data', button('Open folder', { icon: ICONS.folder, attrs: 'data-open-data' }))])}
-      ${group('About', [`<div class="about"><span class="brand-mark lg">${brandSVG(30)}</span><span>Ultron ${esc(info.version)}</span></div>`])}
+      ${group('About', [`<div class="about"><span class="brand-mark lg">${brandSVG(30)}</span><span>Ultron ${esc(info.version)}</span></div>`,
+        row('Updates', button('Check for updates', { attrs: 'data-check-update' }))])}
     </div>`;
 }
 
@@ -55,6 +66,8 @@ export function mount(el) {
   onSegment(root, 'theme', async v => { await saveConfig({ theme: v }); document.dispatchEvent(new Event('themechange')); render(); });
   onToggle(root, 'minimize', async value => { await saveConfig({ closeOnLaunch: value }); render(); });
   on(root, 'click', '[data-open-data]', () => api.openPath(info.userData));
+  on(root, 'click', '[data-run-setup]', () => setup.open());
+  on(root, 'click', '[data-check-update]', async () => toast(UPDATE_TEXT[await api.checkForUpdates()]));
   on(root, 'click', '[data-memory]', async btn => {
     const dir = btn.dataset.memory === 'pick' ? await api.pickFolder() : '';
     if (dir === null) return;

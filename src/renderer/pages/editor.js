@@ -1,9 +1,9 @@
 import { $, esc, on } from '../lib/dom.js';
 import { ACCESSORIES, COLORS, EYES, colorHex, mascotSVG } from '../lib/mascots.js';
-import { ICONS, button, chip, closeDrawer, errorText, onSegment, onSelect, onToggle, openDrawer, openModal, segmented, select, skeleton, tip, toast, toggle, updateDrawer } from '../lib/ui.js';
+import { ICONS, button, chip, closeDrawer, onSegment, onSelect, onToggle, openDrawer, openModal, segmented, select, skeleton, tip, toast, toggle, updateDrawer } from '../lib/ui.js';
 import { planBadge, planChoices } from '../lib/plan.js';
 import { ago } from '../lib/format.js';
-import { api, state, accountById, loadModels, loadTargets, saveConfig } from '../lib/state.js';
+import { api, state, accountById, loadModels, loadTargets, saveConfig, toastError } from '../lib/state.js';
 
 let onSaved = () => {};
 export const setEditorListener = fn => { onSaved = fn; };
@@ -142,7 +142,7 @@ export function mount() {
     updateDrawer(drawerBody(accountById(editingId)));
   });
   on(drawer, 'click', '[data-sign-in]', async () => {
-    try { await api.signIn(editingId, 'cli'); } catch (err) { toast(errorText(err), { kind: 'error' }); }
+    try { await api.signIn(editingId, 'cli'); } catch (err) { toastError(err); }
   });
   onSelect(drawer, 'model', model => {
     const efforts = state.models[editingId].find(m => m.id === model).efforts;
@@ -241,7 +241,7 @@ async function addAccount() {
     if (t.dataset.provider) { s.provider = t.dataset.provider; return draw(); }
     if (t.matches('[data-back]')) { if (s.step === 2) readFields(); return goTo(s.step - 1); }
     if (t.dataset.signIn) {
-      try { await api.signIn(s.draft.id, t.dataset.signIn); } catch (err) { toast(errorText(err), { kind: 'error' }); }
+      try { await api.signIn(s.draft.id, t.dataset.signIn); } catch (err) { toastError(err); }
       return;
     }
     if (t.dataset.color) { readFields(); s.draft.color = Number(t.dataset.color); return draw(); }

@@ -1,8 +1,8 @@
 import { $, esc, on } from '../lib/dom.js';
 import * as fmt from '../lib/format.js';
 import { colorHex, mascotSVG } from '../lib/mascots.js';
-import { ICONS, badge, button, errorText, flip, phase, tip, toast } from '../lib/ui.js';
-import { api, state, accountById, loadTargets } from '../lib/state.js';
+import { ICONS, badge, button, flip, phase, tip, toast } from '../lib/ui.js';
+import { api, state, accountById, loadTargets, toastError } from '../lib/state.js';
 import { planBadge, planChoices } from '../lib/plan.js';
 import { openEditor } from './editor.js';
 
@@ -96,7 +96,7 @@ export async function launch(id, targetId) {
     const label = targetsOf(account).find(t => t.id === used)?.label || '';
     toast(`Opening ${account.name}${label ? ` in ${label}` : ''}…`, { icon: mascotSVG(account, 22) });
   } catch (err) {
-    toast(errorText(err), { kind: 'error' });
+    toastError(err, id);
   }
   render();
 }
@@ -118,7 +118,7 @@ export function mount(el) {
     launch(btn.closest('[data-account]').dataset.account, btn.dataset.openWith);
   });
   on(root, 'click', '[data-sign-in]', async btn => {
-    try { await api.signIn(btn.closest('[data-account]').dataset.account, 'cli'); } catch (err) { toast(errorText(err), { kind: 'error' }); }
+    try { await api.signIn(btn.closest('[data-account]').dataset.account, 'cli'); } catch (err) { toastError(err); }
   });
   on(root, 'click', '[data-plan-ask]', btn => {
     const id = btn.closest('[data-account]').dataset.account;

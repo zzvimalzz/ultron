@@ -107,7 +107,7 @@ function availableTargets(account, accounts) {
 async function openAccount(account, targetId, accounts) {
   const target = targetById(targetId) || targetById(PROVIDERS[account.provider].defaultTarget);
   const located = target.locate();
-  if (!located) throw new Error(`${target.label} is not installed`);
+  if (!located) throw new Error(`${target.label} isn't installed`);
   const locked = lockedReason(account, accounts, target);
   if (locked) throw new Error(locked);
   await target.open(located, account);
@@ -119,7 +119,7 @@ async function signIn(account, part, accounts) {
   if (part === 'desktop') return openAccount(account, PROVIDERS[account.provider].defaultTarget, accounts);
   const cli = CLIS[account.provider];
   const exe = which(cli.command);
-  if (!exe) throw new Error(`${PROVIDERS[account.provider].label} CLI is not installed`);
+  if (!exe) throw new Error(`${PROVIDERS[account.provider].label} CLI isn't installed`);
   await inTerminal(`Sign in: ${account.name}`, exe, cli.login, cliEnv(account));
   return null;
 }

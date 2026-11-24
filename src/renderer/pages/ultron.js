@@ -1,9 +1,9 @@
 import { $, esc, on } from '../lib/dom.js';
 import * as fmt from '../lib/format.js';
 import { brandSVG, colorHex, mascotSVG } from '../lib/mascots.js';
-import { ICONS, button, errorText, flip, onSegment, openDrawer, options, phase, segmented, skeleton, tip, tipRows, toast } from '../lib/ui.js';
+import { ICONS, button, flip, onSegment, openDrawer, options, phase, segmented, skeleton, tip, tipRows, toast } from '../lib/ui.js';
 import { flowchart } from '../lib/flowchart.js';
-import { api, accountById, saveConfig, state } from '../lib/state.js';
+import { api, accountById, saveConfig, state, toastError } from '../lib/state.js';
 import { openEditor } from './editor.js';
 import * as memoryView from './memory.js';
 
@@ -262,6 +262,9 @@ function head() {
 }
 
 function composer() {
+  if (!data.agents.some(a => a.eligible)) {
+    return `<div class="card empty-card">Ultron needs a paid account to lead${button('Go to accounts', { attrs: 'data-goto-accounts' })}</div>`;
+  }
   const blocker = runBlocker();
   const live = running();
   const action = live ? button('Stop', { attrs: 'data-stop' })
@@ -271,7 +274,7 @@ function composer() {
     + `<button class="folder-chip" data-folder ${live ? 'disabled' : ''} data-tip="${tip(folder() || 'Choose a folder')}">${ICONS.folder}<span>${esc(folder() ? folder().split(/[\\/]/).pop() : 'Choose folder')}</span></button>${action}</div>`;
 }
 
-const keyOf = () => [tab, viewingId, running(), data.leader, Boolean(leader()?.eligible), data.connected, folder(), menuOpen, Boolean(view)].join('|');
+const keyOf = () => [tab, viewingId, running(), data.leader, Boolean(leader()?.eligible), data.agents.some(a => a.eligible), data.connected, folder(), menuOpen, Boolean(view)].join('|');
 
 function drawParts() {
   drawMap();
@@ -312,7 +315,7 @@ async function guarded(action) {
   try {
     await action();
   } catch (err) {
-    toast(errorText(err), { kind: 'error' });
+    toastError(err, data.leader);
   }
   await load();
 }
@@ -380,6 +383,7 @@ export function mount(el) {
     }
     if (e.target.id === 'replyText' && e.key === 'Enter') $('[data-reply]', root).click();
   });
+  on(root, 'click', '[data-goto-accounts]', () => $('.nav-item[data-page="accounts"]').click());
   on(root, 'click', '[data-run]', () => {
     if (!draft.trim()) return;
     guarded(async () => {

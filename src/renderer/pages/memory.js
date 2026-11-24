@@ -53,7 +53,7 @@ function changes() {
     return `<div class="feed-row"><span class="mini" style="--account:${colorHex(who.color)}">${mascotSVG(who, 18)}</span><div class="feed-main">`
       + `<div class="feed-head"><b>${esc(who.name)}</b> ${esc((VERBS[e.action] || (x => x.action))(e))}<span class="muted">${fmt.ago(e.t)}</span></div></div></div>`;
   });
-  return rows.join('') || '<div class="feed-empty muted">No changes yet</div>';
+  return rows.join('') || '<div class="feed-empty muted">Nothing saved yet</div>';
 }
 
 function draw() {

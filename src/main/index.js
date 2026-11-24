@@ -5,6 +5,8 @@ const { app, BrowserWindow, Notification, ipcMain, nativeTheme, shell, dialog } 
 const { createStore, blankAccount } = require('./config');
 const { resolveDataDir, isRunning, profileReady, lastActivityAt } = require('./profiles');
 const { installs, availableTargets, openAccount, signIn, isLaunchOnly } = require('./targets');
+const { appRows, runInstall } = require('./setup');
+const { createUpdater } = require('./updater');
 const { signedIn } = require('../hub/cli');
 const { createUsage } = require('./usage');
 const { connectAgents } = require('./agents');
@@ -33,6 +35,7 @@ let usage;
 let detection;
 let curator;
 let tasks;
+let updater;
 
 const vaultDir = () => store.get().memory.dir || MEMORY_DIR;
 const usageAccounts = () => store.get().accounts.map(a => ({ ...a, realDataDir: resolveDataDir(a.dataDir) }));
@@ -172,8 +175,12 @@ function registerIpc() {
     const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0];
   });
-  ipcMain.handle('app:info', () => ({ version: app.getVersion(), userData: app.getPath('userData'), roles: ROLES, sections: memory.MEMORY_SECTIONS, git: checkpoint.available() }));
+  ipcMain.handle('app:info', () => ({ version: app.getVersion(), userData: app.getPath('userData'), roles: ROLES, sections: memory.MEMORY_SECTIONS, git: checkpoint.available(), updateReady: updater.ready() }));
   ipcMain.handle('app:openPath', (_e, p) => shell.openPath(p));
+  ipcMain.handle('setup:apps', appRows);
+  ipcMain.handle('setup:run', (_e, id) => runInstall(id));
+  ipcMain.handle('update:check', () => updater.check());
+  ipcMain.handle('update:install', () => updater.install());
 }
 
 app.on('second-instance', () => {
@@ -205,9 +212,10 @@ app.whenReady().then(async () => {
     onQuestion: askedByTask,
   });
   tasks.sweep();
+  updater = createUpdater({ onReady: () => win?.webContents.send('update-ready') });
   registerIpc();
   createWindow();
-  win.once('ready-to-show', detection.start);
+  win.once('ready-to-show', () => { detection.start(); updater.start(); });
   startLiveUpdates();
 });
 

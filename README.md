@@ -8,19 +8,35 @@ A small Windows launcher for Claude and ChatGPT desktop accounts, with a local u
 - **Usage:** tokens, token mix, top model, active time, sessions, tokens over time, a Week / Month / Year activity heatmap, models, accounts and projects. Filter by account and by 24H, 7D, 30D, 90D or All.
 - **Ultron:** give a task to the leader you chose. The leader works headlessly and, only when it needs to, builds teams with leads and members on your other paid accounts. Everyone runs behind a guard that only lets reversible actions through (no `git push`, no deletes outside the folder, no global installs); questions climb member → lead → leader → you and appear as an approval card and a Windows notification. A live chart shows the teams, delegations, reports, questions and memory use; the timeline logs every step. When a task finishes you see what changed and can **Undo all** (the folder is restored from a shadow Git checkpoint, so Git must be installed) or **Continue in terminal**. **Connect agents** gives Claude Code and Codex the Ultron Hub (shared memory and messages) and the `kiss` and `repo-structure` skills; **Disconnect** removes them.
 - **Memory:** one vault of plain Markdown per device (`~/.ultron/memory` by default, or any folder you choose, including an existing vault). Agents read it at the start of a task and record outcomes, decisions and facts in separate places; facts about you wait under **To confirm** or in the **Inbox** until you review them on the Ultron page's Memory tab. **Keep memory tidy** lets a chosen account write sessions up after they end and review the vault weekly.
-- **Settings:** name, theme, minimize after opening, memory folder and tidying.
+- **Settings:** name, theme, minimize after opening, setup, memory folder and tidying, updates.
 
 Usage covers Claude Code and Codex sessions stored on this PC. Chat conversations aren't stored locally, so they aren't counted.
 
 ## Install
 
-1. Open [Releases](../../releases/latest) and download `Ultron-Setup-<version>.exe`.
+1. Open [Releases](../../releases/latest) and download `Ultron-Setup-<version>.exe`. The installer isn't code-signed, so if Windows shows "Windows protected your PC", choose **More info → Run anyway**.
 2. Run it. Ultron installs for your user only (no admin needed) and adds Desktop and Start Menu shortcuts.
-3. If Windows shows "Windows protected your PC", choose **More info → Run anyway**. The installer isn't code-signed.
+3. Open Ultron and follow setup.
 
 On first launch Ultron adds the Claude and ChatGPT desktop apps it finds. To add another account, choose **Add account**: pick the service, sign in to its desktop app and terminal, then give it a look. Every new account gets its own CLI folder under `~/.ultron/homes`, so several Claude and Codex accounts run side by side in the terminal and in VS Code. ChatGPT Desktop holds one account, so extra ChatGPT accounts open in the CLI.
 
 **Gemini and Grok** are launch-only: they open in your browser and have no plan badge. They stay out of the crew because neither vendor's CLI can keep separate accounts apart or report a plan that Ultron can read.
+
+## For friends and family
+
+Install, open Ultron, and follow setup. It has four steps, and every one can be skipped:
+
+1. **Apps:** shows which of Claude Desktop, Claude Code, ChatGPT Desktop, Codex and Git are installed. A missing app has an **Install** link to its official page. Where a one-line install exists (`winget` or `npm`), the exact command is shown and **Run** opens it in a terminal after you click it. Nothing installs on its own.
+2. **Accounts:** sign in to each account and add more.
+3. **Memory:** create a new vault or choose an existing folder, and choose whether to connect your agents.
+4. **Ready:** open Ultron. **Settings → Run setup again** brings it back.
+
+Once a release is public, Ultron checks for updates every six hours and shows **Update ready · Restart** at the bottom of the sidebar. **Settings → Check for updates** checks now.
+
+### What Ultron can't see
+
+- Chat conversations. Only Claude Code and Codex sessions are stored on your PC, so only those are counted.
+- Free plans' limits and usage. A free account can be launched and counted, but it stays out of the crew.
 
 ## Release
 

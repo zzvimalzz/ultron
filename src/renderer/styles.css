@@ -630,3 +630,20 @@ details.adv .field { margin-top: var(--sp-3); }
 @media (prefers-reduced-motion: reduce) {
   .node.working { animation: none !important; }
 }
+
+/* Setup and updates */
+#setup { z-index: 85; }
+.modal.setup { width: min(620px, calc(100vw - 48px)); }
+.setup .modal-body { min-height: 300px; display: flex; flex-direction: column; gap: 10px; }
+.setup .lrow + .lrow { margin-top: 0; }
+.setup-list { display: flex; flex-direction: column; gap: 10px; }
+.setup .lrow .logo svg.mascot { fill: initial; stroke: none; width: 26px; height: auto; }
+.setup .lrow .radio { flex: 1; padding: 0; }
+.setup .lrow .dir { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-caption); }
+.cmd { max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 3px 8px; border-radius: 6px; background: var(--active); color: var(--text-2); font: 12px/1.4 Consolas, monospace; }
+.setup-done { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-4); }
+.setup-done h3 { font-size: 20px; }
+.update-pill { margin: var(--sp-3) 6px 0; height: 30px; border: 0; border-radius: var(--r-pill); background: var(--accent); color: var(--accent-ink); font: 600 var(--fs-caption)/1 var(--font); cursor: pointer; animation: pop-in var(--dur-2) var(--ease-out); }
+.update-pill[hidden] { display: none; }
+.empty-card { display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); padding: var(--sp-6); text-align: center; color: var(--text-2); }
+.toast .toast-action { pointer-events: auto; margin-left: var(--sp-2); border: 0; background: transparent; color: var(--accent); font: 600 var(--fs-small)/1 var(--font); cursor: pointer; }

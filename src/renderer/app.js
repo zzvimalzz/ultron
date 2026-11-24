@@ -7,6 +7,7 @@ import * as usage from './pages/usage.js';
 import * as ultron from './pages/ultron.js';
 import * as settings from './pages/settings.js';
 import * as editor from './pages/editor.js';
+import * as setup from './pages/setup.js';
 
 const PAGES = { accounts, usage, ultron, settings };
 const SHORTCUTS = { 1: 'accounts', 2: 'usage', 3: 'ultron', ',': 'settings' };
@@ -55,10 +56,12 @@ async function refreshLive() {
   if (current === 'accounts' && !modalOpen()) accounts.render();
   if (state.usageData) await usage.load();
   if (current === 'ultron' && !modalOpen()) await ultron.load();
+  setup.refresh();
   $('.nav-item[data-page="ultron"]').classList.toggle('ping', (await api.tasks.list()).some(t => t.status === 'waiting'));
 }
 
 function onKey(e) {
+  if (setup.isOpen() && !modalOpen()) return;
   if (modalOpen()) {
     if (e.key === 'Escape') $('#modal [data-close]')?.click();
     return;
@@ -84,7 +87,9 @@ async function boot() {
   document.addEventListener('themechange', () => { applyTheme(); if (state.usageData) usage.render(); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (current === 'usage') usage.render(); });
   editor.mount();
-  editor.setEditorListener(async () => { renderSidebar(); await loadTargets(); PAGES[current].render(); });
+  editor.setEditorListener(async () => { renderSidebar(); await loadTargets(); PAGES[current].render(); setup.refresh(); });
+  setup.mount($('#setup'));
+  setup.setSetupListener(async () => { renderSidebar(); await loadTargets(); show(current); });
   installUi();
   accounts.render();
   moveNav();
@@ -93,6 +98,12 @@ async function boot() {
   api.onLive(refreshLive);
   api.onToast(text => toast(text));
   api.onGoto(page => show(page));
+  const showUpdate = () => { $('#updatePill').hidden = false; };
+  $('#updatePill').addEventListener('click', api.installUpdate);
+  api.onUpdateReady(showUpdate);
+  if (state.info.updateReady) showUpdate();
+  document.addEventListener('opensetup', setup.open);
+  if (!state.config.setupDone) setup.open();
   Promise.all(state.config.accounts.filter(a => a.model).map(a => loadModels(a.id))).then(() => accounts.render());
   // Relative times ("5m ago") drift between live events, so the cards re-render each minute.
   setInterval(() => { if (current === 'accounts' && !modalOpen()) accounts.render(); }, 60000);

@@ -193,7 +193,7 @@ export function render() {
       <span class="spacer"></span>
       ${segmented('range', RANGES, u.range)}
     </div>
-    <div class="usage-body stack ${loading ? 'is-loading' : ''}">${state.usageData ? body() : placeholders()}</div>`;
+    <div class="usage-body stack ${loading ? 'is-loading' : ''}">${!state.usageData ? placeholders() : state.usageData.totals.sessions ? body() : `<div class="empty-card">${u.range === 'all' ? 'No usage yet. Sessions show up here once you use Claude Code or Codex.' : 'Nothing in this range'}</div>`}</div>`;
   drawCharts();
 }
 

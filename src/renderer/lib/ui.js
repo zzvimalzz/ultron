@@ -1,15 +1,19 @@
 import { $, $$, esc, on } from './dom.js';
 
 const DUR = { 1: 120, 2: 200, 3: 320 };
+const ACTION_TOAST_MS = 6000;
 const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ms = step => (reducedMotion() ? 1 : DUR[step]);
 
-export function toast(text, { kind, icon = '', ms: shown = 2600 } = {}) {
+// `action` is one button, { label, run }, for the fix a plain-words error points at.
+export function toast(text, { kind, icon = '', ms: shown = 2600, action } = {}) {
   const el = document.createElement('div');
   el.className = `toast${kind === 'error' ? ' error' : ''}`;
-  el.innerHTML = `${icon ? `<span class="toast-icon">${icon}</span>` : ''}<span>${esc(text)}</span>`;
+  el.innerHTML = `${icon ? `<span class="toast-icon">${icon}</span>` : ''}<span>${esc(text)}</span>${action ? `<button class="toast-action">${esc(action.label)}</button>` : ''}`;
   $('#toasts').appendChild(el);
-  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), ms(2)); }, shown);
+  const dismiss = () => { el.classList.add('out'); setTimeout(() => el.remove(), ms(2)); };
+  if (action) el.querySelector('.toast-action').onclick = () => { dismiss(); action.run(); };
+  setTimeout(dismiss, action ? ACTION_TOAST_MS : shown);
 }
 
 export const options = pairs => pairs.map(([value, label]) => ({ value, label }));
