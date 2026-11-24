@@ -1,13 +1,14 @@
 import { $, esc, on } from '../lib/dom.js';
 import * as fmt from '../lib/format.js';
 import { brandSVG, colorHex, mascotSVG } from '../lib/mascots.js';
-import { errorText, onSegment, options, phase, segmented, tipRows, toast } from '../lib/ui.js';
+import { ICONS, button, errorText, onSegment, options, phase, segmented, skeleton, tip, tipRows, toast } from '../lib/ui.js';
 import { flowchart } from '../lib/flowchart.js';
 import { api, state, saveConfig } from '../lib/state.js';
 import { launch } from './accounts.js';
 
 const LINK_MS = 10 * 60 * 1000;
 const STATUS = { working: 'Working', open: 'Open', idle: 'Idle' };
+const LEGEND = [['dot working', 'Working'], ['dot open', 'Open'], ['dot idle', 'Idle'], ['line message', 'Message'], ['line memory', 'Memory']];
 const OTHER = { id: 'other', name: 'VS Code & CLI', provider: 'claude', color: 7, mascot: {}, strengths: [] };
 
 let root;
@@ -106,24 +107,25 @@ function feed() {
 }
 
 export function render() {
-  if (!data) { root.innerHTML = '<div class="page-head"><h1>Crew</h1></div>'; return; }
+  if (!data) {
+    root.innerHTML = `<div class="page-head"><h1>Crew</h1></div><div class="card flow-card">${skeleton('100%', '540px')}</div>`;
+    return;
+  }
   const leaders = options(state.config.accounts.map(a => [a.id, a.name]));
   root.innerHTML = `
     <div class="page-head">
       <h1>Crew</h1>
       <div class="head-actions">
         ${leaders.length > 1 ? `<span class="muted">Leader</span>${segmented('leader', leaders, data.leader)}` : ''}
-        ${data.connected ? '<button class="btn" data-connect="off">Disconnect</button>' : ''}
+        ${data.connected ? button('Disconnect', { attrs: 'data-connect="off"' }) : `<div class="connect-row">${button('Connect agents', { kind: 'primary', attrs: 'data-connect="on"' })}`
+          + `<span class="info-tip" data-tip="${tip('Gives Claude and Codex shared memory, messages, and the KISS and repo-structure skills.')}" aria-label="What connecting does">${ICONS.info}</span></div>`}
       </div>
     </div>
     <div class="stack">
-      ${data.connected ? '' : `<div class="card connect-card"><span>Give Claude and Codex shared memory, messages, and the KISS and repo-structure skills.</span>
-        <button class="btn primary" data-connect="on">Connect agents</button></div>`}
       <div class="card flow-card">
         <div class="flow" id="flow"></div>
         <div class="legend flow-legend">
-          <span><i class="dot working"></i>Working</span><span><i class="dot open"></i>Open</span><span><i class="dot idle"></i>Idle</span>
-          <span><i class="line message"></i>Message</span><span><i class="line memory"></i>Memory</span>
+          ${LEGEND.map(([cls, label]) => `<span data-tip="${tip(label)}" aria-label="${label}"><i class="${cls}"></i></span>`).join('')}
         </div>
       </div>
       <div class="card"><h2 class="card-title">Activity</h2><div class="scroll-area feed">${feed()}</div></div>

@@ -1,22 +1,107 @@
-import { $, esc, on } from './dom.js';
+import { $, $$, esc, on } from './dom.js';
 
-export function toast(text, { kind, icon = '', ms = 2600 } = {}) {
+const DUR = { 1: 120, 2: 200, 3: 320 };
+const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const ms = step => (reducedMotion() ? 1 : DUR[step]);
+
+export function toast(text, { kind, icon = '', ms: shown = 2600 } = {}) {
   const el = document.createElement('div');
   el.className = `toast${kind === 'error' ? ' error' : ''}`;
   el.innerHTML = `${icon ? `<span class="toast-icon">${icon}</span>` : ''}<span>${esc(text)}</span>`;
   $('#toasts').appendChild(el);
-  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 220); }, ms);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), ms(2)); }, shown);
 }
 
 export const options = pairs => pairs.map(([value, label]) => ({ value, label }));
 
-export function segmented(name, options, current) {
-  return `<div class="seg" data-seg="${name}">${options.map(o => `<button class="${String(o.value) === String(current) ? 'on' : ''}" data-value="${esc(o.value)}">`
+// Components return markup. `attrs` is raw HTML, so callers escape any values they put in it.
+export const button = (label, { kind = '', icon = '', attrs = '' } = {}) =>
+  `<button class="btn ${kind}" ${attrs}>${icon}${esc(label)}</button>`;
+
+export const badge = (text, { tone = '', attrs = '' } = {}) => `<span class="badge ${tone}" ${attrs}>${esc(text)}</span>`;
+
+export const chip = (label, { on: active = false, attrs = '' } = {}) =>
+  `<button class="chip ${active ? 'on' : ''}" aria-pressed="${active}" ${attrs}>${esc(label)}</button>`;
+
+export const toggle = (name, active, label) =>
+  `<button class="switch ${active ? 'on' : ''}" data-toggle="${name}" role="switch" aria-checked="${!!active}" aria-label="${esc(label)}"></button>`;
+
+export const onToggle = (root, name, handler) => on(root, 'click', `[data-toggle="${name}"]`, btn => handler(btn.getAttribute('aria-checked') !== 'true'));
+
+export const skeleton = (width, height) => `<span class="skeleton" style="width:${width};height:${height}"></span>`;
+
+export function segmented(name, items, current) {
+  return `<div class="seg" data-seg="${name}"><span class="thumb"></span>${items.map(o => `<button class="${String(o.value) === String(current) ? 'on' : ''}" data-value="${esc(o.value)}">`
     + `${o.dot ? `<span class="dot" style="background:${o.dot}"></span>` : ''}${esc(o.label)}</button>`).join('')}</div>`;
 }
 
 export function onSegment(root, name, handler) {
   on(root, 'click', `[data-seg="${name}"] button`, btn => handler(btn.dataset.value));
+}
+
+// The thumb slides from where the same control last sat, so it still glides after a page re-render.
+const thumbX = new Map();
+export function placeThumbs(root = document) {
+  for (const seg of $$('.seg', root)) {
+    const thumb = $('.thumb', seg);
+    const active = $('button.on', seg);
+    if (!thumb || !active || !active.offsetWidth) continue;
+    const name = seg.dataset.seg;
+    const x = active.offsetLeft;
+    const from = thumbX.get(name);
+    thumb.style.width = `${active.offsetWidth}px`;
+    thumbX.set(name, x);
+    if (from !== undefined && from !== x && !reducedMotion()) {
+      thumb.style.transform = `translateX(${from}px)`;
+      void thumb.offsetWidth;
+      thumb.classList.add('ready');
+    } else {
+      requestAnimationFrame(() => thumb.classList.add('ready'));
+    }
+    thumb.style.transform = `translateX(${x}px)`;
+  }
+}
+
+// A custom list in place of a native <select>. The menu is built on open, so nothing re-renders.
+export function select(name, items, value) {
+  const current = items.find(o => String(o.value) === String(value));
+  return `<div class="select" data-select="${name}" data-items="${esc(JSON.stringify(items))}" data-value="${esc(value ?? '')}">`
+    + `<button class="select-btn" aria-haspopup="listbox" aria-expanded="false"><span class="label">${esc(current ? current.label : '')}</span>${ICONS.chevron}</button></div>`;
+}
+
+export const onSelect = (root, name, handler) => root.addEventListener('select', e => {
+  if (e.detail.name === name) handler(e.detail.value);
+});
+
+function closeSelects(except) {
+  for (const el of $$('.select')) {
+    if (el === except) continue;
+    $('.menu', el)?.remove();
+    $('.select-btn', el).setAttribute('aria-expanded', 'false');
+  }
+}
+
+function toggleSelect(el) {
+  const open = $('.menu', el);
+  closeSelects(open ? null : el);
+  if (open) { open.remove(); $('.select-btn', el).setAttribute('aria-expanded', 'false'); return; }
+  const items = JSON.parse(el.dataset.items);
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.setAttribute('role', 'listbox');
+  menu.innerHTML = items.map(o => `<button role="option" data-value="${esc(o.value)}" aria-selected="${String(o.value) === el.dataset.value}">`
+    + `<span class="menu-check">${String(o.value) === el.dataset.value ? ICONS.check : ''}</span>${esc(o.label)}</button>`).join('');
+  el.appendChild(menu);
+  $('.select-btn', el).setAttribute('aria-expanded', 'true');
+}
+
+function pickSelect(btn) {
+  const el = btn.closest('.select');
+  const items = JSON.parse(el.dataset.items);
+  el.dataset.value = btn.dataset.value;
+  $('.label', el).textContent = items.find(o => String(o.value) === btn.dataset.value)?.label || '';
+  closeSelects();
+  el.dispatchEvent(new CustomEvent('select', { bubbles: true, detail: { name: el.dataset.select, value: btn.dataset.value } }));
 }
 
 export function paginate(items, page, size) {
@@ -38,8 +123,25 @@ export function onPage(root, handler) {
   on(root, 'click', '[data-page-of]', btn => handler(btn.dataset.pageOf, Number(btn.dataset.step)));
 }
 
+// FLIP: elements marked data-flip="<key>" glide from their old position after `render` rebuilds the markup.
+export function flip(container, render) {
+  const visible = Boolean(container.offsetParent);
+  const before = new Map(visible ? $$('[data-flip]', container).map(el => [el.dataset.flip, el.getBoundingClientRect()]) : []);
+  render();
+  if (!visible || reducedMotion()) return;
+  for (const el of $$('[data-flip]', container)) {
+    const old = before.get(el.dataset.flip);
+    const now = el.getBoundingClientRect();
+    if (!old) {
+      if (before.size) el.animate([{ opacity: 0, transform: 'scale(.94) translateY(8px)' }, { opacity: 1, transform: 'none' }], { duration: DUR[3], easing: 'cubic-bezier(.34,1.3,.64,1)' });
+    } else if (old.left !== now.left || old.top !== now.top) {
+      el.animate([{ transform: `translate(${old.left - now.left}px, ${old.top - now.top}px)` }, { transform: 'none' }], { duration: DUR[3], easing: 'cubic-bezier(.2,.8,.2,1)' });
+    }
+  }
+}
+
 // Any element with data-tip="<html>" shows a tooltip on hover.
-export function installTooltips() {
+function installTooltips() {
   const tip = $('#tooltip');
   document.addEventListener('mousemove', e => {
     const host = e.target.closest('[data-tip]');
@@ -58,21 +160,90 @@ export function installTooltips() {
 export const tipRows = (title, rows) => esc(`<div class="t">${esc(title)}</div>${rows.map(([label, value, color]) =>
   `<div class="r"><span>${color ? `<i style="background:${color}"></i>` : ''}${esc(label)}</span><b>${esc(value)}</b></div>`).join('')}`);
 
+// Plain text for a data-tip attribute.
+export const tip = text => esc(esc(text));
+
 export function openModal(html) {
   const modal = $('#modal');
+  clearTimeout(modal.settle);
+  modal.classList.remove('closing', 'settled');
   modal.innerHTML = html;
   modal.hidden = false;
-  const close = () => { modal.hidden = true; modal.innerHTML = ''; };
+  modal.settle = setTimeout(() => modal.classList.add('settled'), DUR[3]);
+  const close = () => {
+    modal.classList.add('closing');
+    setTimeout(() => { if (modal.classList.contains('closing')) { modal.hidden = true; modal.innerHTML = ''; modal.classList.remove('closing'); } }, ms(2));
+  };
   modal.onclick = e => { if (e.target === modal || e.target.closest('[data-close]')) close(); };
   return close;
 }
 
-export const modalOpen = () => !$('#modal').hidden;
+export const modalOpen = () => !$('#modal').hidden && !$('#modal').classList.contains('closing');
+
+let drawerClose = null;
+let drawerOnClose = null;
+
+const drawerHead = (title, lead) => `${lead || ''}<span class="t">${esc(title)}</span><button class="icon-btn" data-drawer-close aria-label="Close">${ICONS.close}</button>`;
+
+// A right sheet with a title and a scrollable body; `lead` is optional markup before the title.
+export function openDrawer(html, { title = '', lead = '', onClose } = {}) {
+  const root = $('#drawer');
+  drawerOnClose?.();
+  drawerOnClose = onClose || null;
+  root.hidden = false;
+  root.classList.remove('open');
+  root.innerHTML = `<div class="drawer-scrim" data-drawer-close></div>`
+    + `<aside class="drawer" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="drawer-head">${drawerHead(title, lead)}</div><div class="drawer-body">${html}</div></aside>`;
+  requestAnimationFrame(() => requestAnimationFrame(() => { root.classList.add('open'); placeThumbs(root); }));
+  drawerClose = () => {
+    if (!root.classList.contains('open')) return;
+    root.classList.remove('open');
+    const done = () => { if (!root.classList.contains('open')) { root.hidden = true; root.innerHTML = ''; } };
+    $('.drawer', root).addEventListener('transitionend', done, { once: true });
+    setTimeout(done, ms(3) + 60);
+    drawerClose = null;
+    drawerOnClose?.();
+    drawerOnClose = null;
+  };
+  return drawerClose;
+}
+
+// Redraws the open drawer in place, keeping its scroll position.
+export function updateDrawer(html, { title, lead } = {}) {
+  const body = $('#drawer .drawer-body');
+  if (!body) return;
+  const top = body.scrollTop;
+  body.innerHTML = html;
+  body.scrollTop = top;
+  if (title !== undefined) $('#drawer .drawer-head').innerHTML = drawerHead(title, lead);
+  placeThumbs($('#drawer'));
+}
+
+export const drawerOpen = () => !$('#drawer').hidden && $('#drawer').classList.contains('open');
+export const closeDrawer = () => drawerClose?.();
 
 export const errorText = err => err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 
 // Re-rendered markup restarts CSS animations; a delay tied to the clock keeps each loop continuous.
 export const phase = (offset = 0) => `--phase:-${Math.round(performance.now() + offset * 700)}ms`;
+
+export function installUi() {
+  installTooltips();
+  const drawer = $('#drawer');
+  on(drawer, 'click', '[data-drawer-close]', () => closeDrawer());
+  on(document, 'click', '.select-btn', btn => toggleSelect(btn.closest('.select')));
+  on(document, 'click', '.select .menu button', pickSelect);
+  document.addEventListener('click', e => { if (!e.target.closest('.select')) closeSelects(); });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    if ($('.select .menu')) closeSelects();
+    else if (drawerOpen() && !modalOpen()) closeDrawer();
+  });
+  // Controls rendered after boot get their thumb as soon as they reach the page.
+  new MutationObserver(records => {
+    for (const r of records) for (const node of r.addedNodes) if (node.nodeType === 1 && (node.matches('.seg') || node.querySelector('.seg'))) { placeThumbs(node.parentElement); return; }
+  }).observe(document.body, { childList: true, subtree: true });
+}
 
 export const ICONS = {
   arrow: '<svg viewBox="0 0 16 16"><path d="M3 8h10M9 4l4 4-4 4"/></svg>',

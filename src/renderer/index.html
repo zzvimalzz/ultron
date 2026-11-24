@@ -14,6 +14,7 @@
         <span class="brand-name">Ultron</span>
       </div>
       <nav class="nav">
+        <span class="nav-ind" id="navInd"></span>
         <button class="nav-item active" data-page="accounts">
           <svg viewBox="0 0 20 20"><rect x="3" y="3" width="6" height="6" rx="1.6"/><rect x="11" y="3" width="6" height="6" rx="1.6"/><rect x="3" y="11" width="6" height="6" rx="1.6"/><rect x="11" y="11" width="6" height="6" rx="1.6"/></svg>
           <span>Accounts</span><kbd>Ctrl 1</kbd>
@@ -47,6 +48,7 @@
 
   <div class="tooltip" id="tooltip" role="tooltip"></div>
   <div class="toasts" id="toasts" aria-live="polite"></div>
+  <div class="drawer-root" id="drawer" hidden></div>
   <div class="modal-backdrop" id="modal" hidden></div>
 
   <script type="module" src="app.js"></script>

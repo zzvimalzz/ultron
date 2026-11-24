@@ -1,7 +1,7 @@
 import { $, esc, cssVar } from '../lib/dom.js';
 import * as fmt from '../lib/format.js';
 import { heatGrid, stackedBars } from '../lib/charts.js';
-import { ICONS, onPage, onSegment, options, pager, paginate, segmented, tipRows, toast } from '../lib/ui.js';
+import { ICONS, onPage, onSegment, options, pager, paginate, segmented, skeleton, tip, tipRows, toast } from '../lib/ui.js';
 import { api, state } from '../lib/state.js';
 
 const RANGES = options([['24h', '24H'], ['7d', '7D'], ['30d', '30D'], ['90d', '90D'], ['all', 'All']]);
@@ -167,14 +167,12 @@ function body() {
           ${projects.rows.map(p => `<tr><td class="name" title="${esc(p.name)}">${esc(p.name)}</td><td class="r">${p.sessions}</td><td class="r">${fmt.tokens(p.total)}</td><td class="r muted">${fmt.ago(p.lastActive)}</td></tr>`).join('')}
         </tbody></table>` : '<div class="empty">Nothing in this range</div>'}
       </div>
-    </div>
-
-    <p class="note">${ICONS.info}<span>Claude Code and Codex sessions on this PC. Chat conversations aren't stored locally. Updated ${fmt.time(data.generatedAt, { hour: 'numeric', minute: '2-digit' })}.</span></p>`;
+    </div>`;
 }
 
-function skeleton() {
-  return `<div class="kpis">${'<div class="card kpi"><div class="skeleton" style="height:14px;width:60%"></div><div class="skeleton" style="height:30px;width:70%;margin-top:14px"></div><div class="skeleton" style="height:12px;width:50%;margin-top:10px"></div></div>'.repeat(4)}</div>`
-    + '<div class="card"><div class="skeleton" style="height:300px"></div></div>';
+function placeholders() {
+  const kpiCard = `<div class="card kpi">${skeleton('60%', '14px')}<div style="margin-top:14px">${skeleton('70%', '30px')}</div><div style="margin-top:10px">${skeleton('50%', '12px')}</div></div>`;
+  return `<div class="kpis">${kpiCard.repeat(4)}</div><div class="card">${skeleton('100%', '300px')}</div>`;
 }
 
 // Charts size to their container, so they wait until the page is visible.
@@ -189,13 +187,13 @@ export function render() {
   const u = state.usage;
   const accounts = [{ value: 'all', label: 'All' }, ...accountOptions().map(a => ({ value: a.id, label: a.name, dot: a.color }))];
   root.innerHTML = `
-    <div class="page-head"><h1>Usage</h1></div>
+    <div class="page-head"><h1>Usage</h1>${state.usageData ? `<span class="info-tip" data-tip="${tip(`Claude Code and Codex sessions on this PC. Chat conversations aren't stored locally. Updated ${fmt.time(state.usageData.generatedAt, { hour: 'numeric', minute: '2-digit' })}.`)}" aria-label="About this data">${ICONS.info}</span>` : ''}</div>
     <div class="filters">
       ${segmented('account', accounts, u.account)}
       <span class="spacer"></span>
       ${segmented('range', RANGES, u.range)}
     </div>
-    <div class="usage-body stack ${loading ? 'is-loading' : ''}">${state.usageData ? body() : skeleton()}</div>`;
+    <div class="usage-body stack ${loading ? 'is-loading' : ''}">${state.usageData ? body() : placeholders()}</div>`;
   drawCharts();
 }
 

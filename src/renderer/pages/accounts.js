@@ -1,7 +1,7 @@
 import { $, esc, on } from '../lib/dom.js';
 import * as fmt from '../lib/format.js';
 import { colorHex, mascotSVG } from '../lib/mascots.js';
-import { ICONS, errorText, phase, toast } from '../lib/ui.js';
+import { ICONS, button, errorText, flip, phase, toast } from '../lib/ui.js';
 import { api, state, accountById } from '../lib/state.js';
 import { openEditor } from './editor.js';
 
@@ -22,7 +22,7 @@ function card(account, index) {
   const counted = live.tokens !== undefined;
   const status = live.working ? ['busy', 'Working'] : live.running ? ['on', 'Running'] : ['', 'Not running'];
   return `
-    <div class="acct ${live.working ? 'working' : ''}" role="button" tabindex="0" data-account="${account.id}" aria-label="Open ${esc(account.name)}" style="${phase(index)}">
+    <div class="acct ${live.working ? 'working' : ''}" role="button" tabindex="0" data-flip="${account.id}" data-account="${account.id}" aria-label="Open ${esc(account.name)}" style="${phase(index)}">
       <div class="acct-hero" style="--account:${hex}">
         <span class="status ${status[0]}"><i></i>${status[1]}</span>
         <button class="icon-btn acct-edit" data-edit="${account.id}" aria-label="Customize ${esc(account.name)}">${ICONS.edit}</button>
@@ -52,18 +52,20 @@ function card(account, index) {
     </div>`;
 }
 
-export function render() {
+function draw() {
   const { config } = state;
   root.innerHTML = `
     <div class="page-head">
       <h1>${fmt.greeting()}${config.userName ? `, ${esc(config.userName)}` : ''}</h1>
-      <button class="btn" data-add>${ICONS.plus}Add account</button>
+      ${button('Add account', { icon: ICONS.plus, attrs: 'data-add' })}
     </div>
     <div class="accounts-grid">${config.accounts.length ? config.accounts.map(card).join('')
       : `<button class="acct-empty" data-add>${mascotSVG({ color: 2, mascot: { eyes: 'happy' } }, 72)}<span>Add your first account</span></button>`}</div>`;
   const menu = $('.menu', root);
   if (menu && menu.getBoundingClientRect().bottom > root.closest('.scroller').getBoundingClientRect().bottom) menu.classList.add('up');
 }
+
+export const render = () => flip(root, draw);
 
 export async function launch(id, targetId) {
   const account = accountById(id);

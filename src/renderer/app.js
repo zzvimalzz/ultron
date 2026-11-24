@@ -1,12 +1,12 @@
 import { $, $$, esc } from './lib/dom.js';
 import { brandSVG, colorHex, mascotSVG } from './lib/mascots.js';
-import { installTooltips, modalOpen, phase } from './lib/ui.js';
+import { drawerOpen, installUi, modalOpen, phase, placeThumbs } from './lib/ui.js';
 import { api, state } from './lib/state.js';
 import * as accounts from './pages/accounts.js';
 import * as usage from './pages/usage.js';
 import * as crew from './pages/crew.js';
 import * as settings from './pages/settings.js';
-import { setEditorListener } from './pages/editor.js';
+import * as editor from './pages/editor.js';
 
 const PAGES = { accounts, usage, crew, settings };
 const SHORTCUTS = { 1: 'accounts', 2: 'usage', 3: 'crew', ',': 'settings' };
@@ -18,15 +18,23 @@ function applyTheme() {
   else document.documentElement.setAttribute('data-theme', theme);
 }
 
+function moveNav() {
+  const ind = $('#navInd');
+  ind.style.transform = `translateY(${$('.nav-item.active').offsetTop}px)`;
+  requestAnimationFrame(() => ind.classList.add('ready'));
+}
+
 function show(page) {
   current = page;
   $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.page === page));
   $$('.page').forEach(p => p.classList.toggle('active', p.id === `page-${page}`));
+  moveNav();
   $('#scroller').scrollTop = 0;
   if (page === 'usage' && !state.usageData) usage.load();
   else if (page === 'settings') settings.load();
   else if (page === 'crew') crew.load();
   else PAGES[page].render();
+  placeThumbs($('.page.active'));
 }
 
 function renderSidebar() {
@@ -54,6 +62,7 @@ function onKey(e) {
     if (e.key === 'Escape') $('#modal [data-close]')?.click();
     return;
   }
+  if (drawerOpen()) return;
   if (e.ctrlKey && SHORTCUTS[e.key]) { e.preventDefault(); show(SHORTCUTS[e.key]); return; }
   if (e.ctrlKey || e.altKey || /input|textarea/i.test(document.activeElement?.tagName)) return;
   if (current === 'accounts' && /^[1-9]$/.test(e.key)) {
@@ -64,6 +73,7 @@ function onKey(e) {
 
 async function boot() {
   state.config = await api.getConfig();
+  document.documentElement.classList.toggle('mica', api.mica);
   applyTheme();
   $('#brandMark').innerHTML = brandSVG(26);
   for (const [name, page] of Object.entries(PAGES)) page.mount($(`#page-${name}`));
@@ -71,10 +81,12 @@ async function boot() {
   document.addEventListener('keydown', onKey);
   document.addEventListener('themechange', () => { applyTheme(); if (state.usageData) usage.render(); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (current === 'usage') usage.render(); });
+  editor.mount();
   // A new login opens straight away so the user can sign in.
-  setEditorListener(openId => { renderSidebar(); PAGES[current].render(); if (openId) accounts.launch(openId); });
-  installTooltips();
+  editor.setEditorListener(openId => { renderSidebar(); PAGES[current].render(); if (openId) accounts.launch(openId); });
+  installUi();
   accounts.render();
+  moveNav();
   await accounts.loadTargets();
   await refreshLive();
   api.onLive(refreshLive);

@@ -1,4 +1,5 @@
 'use strict';
+const os = require('os');
 const path = require('path');
 const { app, BrowserWindow, ipcMain, nativeTheme, shell, dialog } = require('electron');
 const { createStore, blankAccount } = require('./config');
@@ -9,6 +10,9 @@ const { connectAgents } = require('./agents');
 const crew = require('./crew');
 
 const LIVE_INTERVAL_MS = 4000;
+const MICA = process.platform === 'win32' && Number(os.release().split('.')[2]) >= 22000;
+const CLEAR = '#00000000';
+const windowBg = c => (MICA ? CLEAR : c.bg);
 const THEME = { dark: { bg: '#111110', fg: '#c9c8c2' }, light: { bg: '#f6f5f2', fg: '#3b3a37' } };
 
 app.setAppUserModelId('app.ultron.launcher');
@@ -30,8 +34,8 @@ function applyTheme() {
   nativeTheme.themeSource = store.get().theme || 'system';
   if (!win) return;
   const c = themeColors();
-  win.setBackgroundColor(c.bg);
-  win.setTitleBarOverlay({ color: c.bg, symbolColor: c.fg, height: 44 });
+  win.setBackgroundColor(windowBg(c));
+  win.setTitleBarOverlay({ color: windowBg(c), symbolColor: c.fg, height: 44 });
 }
 
 function createWindow() {
@@ -39,12 +43,16 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1180, height: 780, minWidth: 940, minHeight: 640,
     title: 'Ultron',
-    backgroundColor: c.bg,
+    backgroundColor: windowBg(c),
+    ...(MICA ? { backgroundMaterial: 'mica' } : {}),
     show: false,
     icon: path.join(__dirname, '..', '..', 'build', 'ultron.ico'),
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: c.bg, symbolColor: c.fg, height: 44 },
-    webPreferences: { preload: path.join(__dirname, '..', 'preload.js'), contextIsolation: true, sandbox: true },
+    titleBarOverlay: { color: windowBg(c), symbolColor: c.fg, height: 44 },
+    webPreferences: {
+      preload: path.join(__dirname, '..', 'preload.js'), contextIsolation: true, sandbox: true,
+      additionalArguments: MICA ? ['--mica'] : [],
+    },
   });
   win.removeMenu();
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));

@@ -10,6 +10,7 @@ CLAUDE.md
 .codex/
 .cursor/
 .github/copilot-instructions.md
+.doc/
 
 # Editor and OS files
 .vscode/

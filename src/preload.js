@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 const invoke = channel => (...args) => ipcRenderer.invoke(channel, ...args);
 
 contextBridge.exposeInMainWorld('ultron', {
+  mica: process.argv.includes('--mica'),
   getConfig: invoke('config:get'),
   updateConfig: invoke('config:update'),
   overview: invoke('accounts:overview'),
