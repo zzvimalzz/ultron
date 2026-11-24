@@ -61,6 +61,9 @@ function isRunning(dir) {
   }
 }
 
+// Chromium writes `Local State` on first run, so it marks a profile that has been opened.
+const profileReady = dir => Boolean(dir) && fs.existsSync(path.join(resolveDataDir(dir), 'Local State'));
+
 // `lockfile` is rewritten at launch and Preferences on every settings flush while the app is open.
 const ACTIVITY_FILES = ['lockfile', 'Preferences', path.join('Default', 'Preferences'), 'Local State'];
 function lastActivityAt(dir) {
@@ -97,4 +100,4 @@ async function findShortcuts(exeName) {
   }
 }
 
-module.exports = { LOCAL, ROAMING, findPackage, resolveDataDir, isRunning, lastActivityAt, findShortcuts };
+module.exports = { LOCAL, ROAMING, findPackage, resolveDataDir, isRunning, profileReady, lastActivityAt, findShortcuts };

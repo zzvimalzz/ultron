@@ -3,8 +3,9 @@ const os = require('os');
 const path = require('path');
 const { app, BrowserWindow, ipcMain, nativeTheme, shell, dialog } = require('electron');
 const { createStore, blankAccount } = require('./config');
-const { resolveDataDir, isRunning, lastActivityAt } = require('./profiles');
-const { PROVIDERS, isInstalled, availableTargets, openAccount } = require('./targets');
+const { resolveDataDir, isRunning, profileReady, lastActivityAt } = require('./profiles');
+const { installs, availableTargets, openAccount, signIn } = require('./targets');
+const { signedIn } = require('../hub/cli');
 const { createUsage } = require('./usage');
 const { connectAgents } = require('./agents');
 const crew = require('./crew');
@@ -69,7 +70,7 @@ async function overview() {
     const used = day && (day.perAccount[a.id] || { total: 0, activeMs: 0 });
     const working = sessions.some(s => s.account === a.id && s.working);
     const lastOpened = running ? Date.now() : Math.max(a.lastOpened || 0, lastActivityAt(a.dataDir), day ? day.lastActivity[a.id] || 0 : 0);
-    return [a.id, { running, working, lastOpened, tokens: used?.total, activeMs: used?.activeMs }];
+    return [a.id, { running, working, lastOpened, signedIn: signedIn(a), tokens: used?.total, activeMs: used?.activeMs }];
   }));
 }
 
@@ -98,12 +99,18 @@ function registerIpc() {
     return config;
   });
   ipcMain.handle('accounts:overview', overview);
-  ipcMain.handle('accounts:targets', (_e, provider) => availableTargets(provider));
+  const accountOf = id => store.get().accounts.find(a => a.id === id);
+  ipcMain.handle('accounts:targets', (_e, id) => availableTargets(accountOf(id), store.get().accounts));
   ipcMain.handle('accounts:blank', (_e, provider, ownProfile) => blankAccount(provider, store.get().accounts, ownProfile));
-  ipcMain.handle('accounts:downloadUrl', (_e, provider) => (isInstalled(provider) ? null : PROVIDERS[provider].download));
+  ipcMain.handle('accounts:installs', installs);
+  ipcMain.handle('accounts:signIn', (_e, id, part) => signIn(accountOf(id), part, store.get().accounts));
+  ipcMain.handle('accounts:status', (_e, id) => {
+    const account = accountOf(id);
+    return { cli: signedIn(account), desktop: profileReady(account.dataDir) };
+  });
   ipcMain.handle('accounts:open', async (_e, id, targetId) => {
-    const account = store.get().accounts.find(a => a.id === id);
-    const used = await openAccount(account, targetId || account.openWith);
+    const account = accountOf(id);
+    const used = await openAccount(account, targetId || account.openWith, store.get().accounts);
     store.updateAccount(id, { openWith: used, lastOpened: Date.now() });
     if (store.get().closeOnLaunch) setTimeout(() => win.minimize(), 400);
     return used;

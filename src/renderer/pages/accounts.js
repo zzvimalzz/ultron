@@ -1,23 +1,26 @@
 import { $, esc, on } from '../lib/dom.js';
 import * as fmt from '../lib/format.js';
 import { colorHex, mascotSVG } from '../lib/mascots.js';
-import { ICONS, button, errorText, flip, phase, toast } from '../lib/ui.js';
-import { api, state, accountById } from '../lib/state.js';
+import { ICONS, button, errorText, flip, phase, tip, toast } from '../lib/ui.js';
+import { api, state, accountById, loadTargets } from '../lib/state.js';
 import { openEditor } from './editor.js';
 
 let root;
 let menuFor = null;
 
+const targetsOf = account => state.targets[account.id] || [];
+
 function openWithMenu(account) {
-  const targets = state.targets[account.provider] || [];
-  return `<div class="menu" role="menu">${targets.map(t => `<button role="menuitemradio" aria-checked="${t.id === account.openWith}" data-open-with="${t.id}">`
+  return `<div class="menu" role="menu">${targetsOf(account).map(t => `<button role="menuitemradio" aria-checked="${t.id === account.openWith}" data-open-with="${t.id}"`
+    + `${t.locked ? ` disabled data-tip="${tip(t.locked)}"` : ''}>`
     + `<span class="menu-check">${t.id === account.openWith ? ICONS.check : ''}</span>${esc(t.label)}</button>`).join('')}</div>`;
 }
 
 function card(account, index) {
   const live = state.overview[account.id] || {};
   const hex = colorHex(account.color);
-  const target = (state.targets[account.provider] || []).find(t => t.id === account.openWith);
+  const target = targetsOf(account).find(t => t.id === account.openWith);
+  const needsSignIn = target?.cli && live.signedIn === false;
   const meta = (label, value) => `<div><div class="k">${label}</div><div class="v">${value}</div></div>`;
   const counted = live.tokens !== undefined;
   const status = live.working ? ['busy', 'Working'] : live.running ? ['on', 'Running'] : ['', 'Not running'];
@@ -37,11 +40,11 @@ function card(account, index) {
             <div class="acct-name">${esc(account.name)}</div>
             ${account.subtitle ? `<div class="acct-sub">${esc(account.subtitle)}</div>` : ''}
           </div>
-          <div class="split" title="${target ? `Open with ${esc(target.label)}` : ''}">
-            <span class="split-main">Open ${ICONS.arrow}</span>
+          ${needsSignIn ? `<span class="acct-action">${button('Sign in', { kind: 'primary sm', attrs: 'data-sign-in' })}</span>` : `<div class="split">
+            <span class="split-main"${target ? ` data-tip="${tip(`Open with ${target.label}`)}"` : ''}>Open ${ICONS.arrow}</span>
             <button class="split-more" data-menu="${account.id}" aria-label="Choose how to open ${esc(account.name)}" aria-expanded="${menuFor === account.id}">${ICONS.chevron}</button>
             ${menuFor === account.id ? openWithMenu(account) : ''}
-          </div>
+          </div>`}
         </div>
         <div class="acct-meta">
           ${meta('Last opened', live.lastOpened === undefined ? '—' : live.running ? 'Now' : fmt.ago(live.lastOpened))}
@@ -74,7 +77,7 @@ export async function launch(id, targetId) {
   try {
     const used = await api.open(id, targetId);
     state.config = await api.getConfig();
-    const label = (state.targets[account.provider] || []).find(t => t.id === used)?.label || '';
+    const label = targetsOf(account).find(t => t.id === used)?.label || '';
     toast(`Opening ${account.name}${label ? ` in ${label}` : ''}…`, { icon: mascotSVG(account, 22) });
   } catch (err) {
     toast(errorText(err), { kind: 'error' });
@@ -84,7 +87,7 @@ export async function launch(id, targetId) {
 
 async function toggleMenu(id) {
   const account = accountById(id);
-  if (menuFor !== id) state.targets[account.provider] = await api.targets(account.provider);
+  if (menuFor !== id) await loadTargets([account]);
   menuFor = menuFor === id ? null : id;
   render();
 }
@@ -98,8 +101,11 @@ export function mount(el) {
     menuFor = null;
     launch(btn.closest('[data-account]').dataset.account, btn.dataset.openWith);
   });
+  on(root, 'click', '[data-sign-in]', async btn => {
+    try { await api.signIn(btn.closest('[data-account]').dataset.account, 'cli'); } catch (err) { toast(errorText(err), { kind: 'error' }); }
+  });
   on(root, 'click', '[data-account]', (el, e) => {
-    if (!e.target.closest('.menu, [data-menu], [data-edit]')) launch(el.dataset.account);
+    if (!e.target.closest('.menu, [data-menu], [data-edit], [data-sign-in]')) launch(el.dataset.account);
   });
   on(root, 'keydown', '[data-account]', (el, e) => {
     if (e.target !== el || (e.key !== 'Enter' && e.key !== ' ')) return;
@@ -110,9 +116,3 @@ export function mount(el) {
     if (menuFor && !e.target.closest('.split')) { menuFor = null; render(); }
   });
 }
-
-export async function loadTargets() {
-  const providers = [...new Set(state.config.accounts.map(a => a.provider))];
-  await Promise.all(providers.map(async p => { state.targets[p] = await api.targets(p); }));
-}
-

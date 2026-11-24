@@ -1,6 +1,6 @@
 'use strict';
-const os = require('os');
 const path = require('path');
+const { CLIS } = require('../../hub/cli');
 const { createScanner } = require('./scan');
 const { buildContext, attribute } = require('./attribution');
 const { aggregate } = require('./aggregate');
@@ -8,16 +8,11 @@ const { aggregate } = require('./aggregate');
 const WORKING_MS = 60 * 1000;
 const ACTIVE_MS = 15 * 60 * 1000;
 
-const HOMES = {
-  claude: { home: path.join(os.homedir(), '.claude'), transcripts: 'projects' },
-  chatgpt: { home: path.join(os.homedir(), '.codex'), transcripts: 'sessions' },
-};
-
 // Shared homes hold every account's sessions; an account with its own CLI home owns everything in it.
 function transcriptSources(accounts) {
-  const shared = Object.entries(HOMES).map(([provider, h]) => ({ provider, root: path.join(h.home, h.transcripts), account: null }));
+  const shared = Object.entries(CLIS).map(([provider, cli]) => ({ provider, root: path.join(cli.defaultHome, cli.transcripts), account: null }));
   const own = accounts.filter(a => a.cliHome)
-    .map(a => ({ provider: a.provider, root: path.join(a.cliHome, HOMES[a.provider].transcripts), account: a.id }));
+    .map(a => ({ provider: a.provider, root: path.join(a.cliHome, CLIS[a.provider].transcripts), account: a.id }));
   return [...own, ...shared.filter(s => !own.some(o => path.resolve(o.root) === path.resolve(s.root)))];
 }
 

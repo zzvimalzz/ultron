@@ -1,7 +1,7 @@
 import { $, $$, esc } from './lib/dom.js';
 import { brandSVG, colorHex, mascotSVG } from './lib/mascots.js';
 import { drawerOpen, installUi, modalOpen, phase, placeThumbs } from './lib/ui.js';
-import { api, state } from './lib/state.js';
+import { api, loadTargets, state } from './lib/state.js';
 import * as accounts from './pages/accounts.js';
 import * as usage from './pages/usage.js';
 import * as crew from './pages/crew.js';
@@ -82,12 +82,11 @@ async function boot() {
   document.addEventListener('themechange', () => { applyTheme(); if (state.usageData) usage.render(); });
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (current === 'usage') usage.render(); });
   editor.mount();
-  // A new login opens straight away so the user can sign in.
-  editor.setEditorListener(openId => { renderSidebar(); PAGES[current].render(); if (openId) accounts.launch(openId); });
+  editor.setEditorListener(async () => { renderSidebar(); await loadTargets(); PAGES[current].render(); });
   installUi();
   accounts.render();
   moveNav();
-  await accounts.loadTargets();
+  await loadTargets();
   await refreshLive();
   api.onLive(refreshLive);
   // Relative times ("5m ago") drift between live events, so the cards re-render each minute.

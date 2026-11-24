@@ -3,8 +3,10 @@ const fs = require('fs');
 const path = require('path');
 const { LOCAL, ROAMING, findShortcuts, resolveDataDir } = require('./profiles');
 const { PROVIDERS, isInstalled } = require('./targets');
+const { HUB_DIR } = require('../hub/files');
 
-const VERSION = 3;
+const VERSION = 4;
+const HOMES_DIR = path.join(HUB_DIR, 'homes');
 
 function defaultClaudeDataDir() {
   const base = path.join(LOCAL, 'Claude-Data');
@@ -43,14 +45,27 @@ function freeClaudeProfile(accounts) {
   }
 }
 
-// A new Claude account gets its own profile folder (and so its own sign-in) once the default one is taken.
+// A new account gets its own CLI home. A new Claude account also gets its own desktop profile (and so its own
+// sign-in) once the default one is taken; a second ChatGPT account has no desktop app of its own and opens in the CLI.
 function blankAccount(provider, accounts, ownProfile) {
   const index = accounts.filter(a => a.provider === provider).length;
   const fields = { mascot: { accessory: 'none', eyes: 'happy' } };
-  if (provider === 'chatgpt') return account(provider, index, { ...fields, dataDir: chatgptDataDir() });
-  ownProfile ??= accounts.some(a => a.provider === 'claude' && !usesOwnProfile(a));
-  const dataDir = ownProfile ? freeClaudeProfile(accounts) : defaultClaudeDataDir();
-  return account(provider, index, { ...fields, dataDir, args: ownProfile ? `--user-data-dir="${dataDir}"` : '' });
+  let created;
+  if (provider === 'chatgpt') {
+    created = account(provider, index, { ...fields, dataDir: index ? '' : chatgptDataDir(), ...(index ? { openWith: PROVIDERS.chatgpt.cliTarget } : {}) });
+  } else {
+    ownProfile ??= accounts.some(a => a.provider === 'claude' && !usesOwnProfile(a));
+    const dataDir = ownProfile ? freeClaudeProfile(accounts) : defaultClaudeDataDir();
+    created = account(provider, index, { ...fields, dataDir, args: ownProfile ? `--user-data-dir="${dataDir}"` : '' });
+  }
+  return { ...created, cliHome: path.join(HOMES_DIR, created.id) };
+}
+
+// Homes Ultron created are made when the account is saved, so the login has somewhere to write.
+function ensureHomes(accounts) {
+  for (const a of accounts) {
+    if (a.cliHome && path.dirname(path.resolve(a.cliHome)).toLowerCase() === HOMES_DIR.toLowerCase()) fs.mkdirSync(a.cliHome, { recursive: true });
+  }
 }
 
 async function discoverClaudeAccounts() {
@@ -96,7 +111,12 @@ function createStore(file) {
       return config;
     },
     get: () => config,
-    update(patch) { config = { ...config, ...patch }; save(); return config; },
+    update(patch) {
+      config = { ...config, ...patch };
+      if (patch.accounts) ensureHomes(config.accounts);
+      save();
+      return config;
+    },
     updateAccount(id, patch) {
       config.accounts = config.accounts.map(a => (a.id === id ? { ...a, ...patch } : a));
       save();

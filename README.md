@@ -15,7 +15,7 @@ Usage covers Claude Code and Codex sessions stored on this PC. Chat conversation
 2. Run it. Ultron installs for your user only (no admin needed) and adds Desktop and Start Menu shortcuts.
 3. If Windows shows "Windows protected your PC", choose **More info → Run anyway**. The installer isn't code-signed.
 
-On first launch Ultron adds the Claude and ChatGPT desktop apps it finds. To add another Claude account, choose **Add account → New login**: Ultron opens Claude with a separate sign-in for it.
+On first launch Ultron adds the Claude and ChatGPT desktop apps it finds. To add another account, choose **Add account**: pick the service, sign in to its desktop app and terminal, then give it a look. Every new account gets its own CLI folder under `~/.ultron/homes`, so several Claude and Codex accounts run side by side in the terminal and in VS Code. ChatGPT Desktop holds one account, so extra ChatGPT accounts open in the CLI.
 
 ## Release
 
@@ -43,7 +43,7 @@ npm run package        # build dist/Ultron-Setup-<version>.exe
 | --- | --- |
 | `src/main/` | App lifecycle, IPC, config, profile detection, "Open with" targets |
 | `src/main/usage/` | Incremental transcript scanning, parsing, attribution and aggregation |
-| `src/hub/` | Ultron Hub MCP server and the skills shipped to every agent |
+| `src/hub/` | Ultron Hub MCP server, the shared CLI table (`cli.js`) and the skills shipped to every agent |
 | `src/renderer/` | Vanilla ES-module UI: `lib/` shared helpers, `pages/` one module per page |
 | `test/` | `node:test` suites with synthetic fixtures |
 | `tools/` | Icon generator, personal-details check, screenshot driver |

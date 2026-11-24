@@ -1,13 +1,11 @@
 import { $, esc, on } from '../lib/dom.js';
 import { ACCESSORIES, COLORS, EYES, colorHex, mascotSVG } from '../lib/mascots.js';
-import { ICONS, button, closeDrawer, onSelect, openDrawer, openModal, segmented, select, toast, updateDrawer } from '../lib/ui.js';
-import { api, state, accountById, saveConfig } from '../lib/state.js';
+import { ICONS, button, closeDrawer, errorText, onSelect, openDrawer, openModal, select, tip, toast, updateDrawer } from '../lib/ui.js';
+import { api, state, accountById, loadTargets, saveConfig } from '../lib/state.js';
 
 let onSaved = () => {};
 export const setEditorListener = fn => { onSaved = fn; };
 
-const PROVIDER_LABELS = { claude: 'Claude', chatgpt: 'ChatGPT' };
-const ownProfile = draft => /--user-data-dir=/.test(draft.args || '');
 
 const field = (name, label, value, extra = '') =>
   `<div class="field"><label>${label}</label><input class="input" data-field="${name}" value="${esc(value)}" spellcheck="false" aria-label="${label}" ${extra}></div>`;
@@ -39,19 +37,13 @@ const withProfileFolder = account => {
   return custom && !account.dataDir ? { ...account, dataDir: custom[2] } : account;
 };
 
-async function pickInto(root, name) {
-  const folder = await api.pickFolder();
-  if (folder) $(`[data-field="${name}"]`, root).value = folder;
-  return folder;
-}
-
 // ---- Edit: the account drawer saves each change as it is made ----
 
 let editingId = null;
 
 function drawerBody(account) {
   const look = appearance(account);
-  const targets = (state.targets[account.provider] || []).map(t => ({ value: t.id, label: t.label }));
+  const targets = (state.targets[account.id] || []).map(t => ({ value: t.id, label: t.label, disabled: t.locked }));
   return `<div class="dsec"><span class="cap">Appearance</span>${look.look}${look.fields}</div>`
     + `<div class="dsec"><span class="cap">Open with</span>${select('openWith', targets, account.openWith)}</div>`
     + `<div class="dsec">${advanced(account)}</div>`
@@ -69,7 +61,7 @@ async function commit(patch) {
 
 async function editAccount(id) {
   const account = accountById(id);
-  state.targets[account.provider] = await api.targets(account.provider);
+  await loadTargets([account]);
   editingId = id;
   openDrawer(drawerBody(account), { title: account.name, lead: drawerLead(account), onClose: () => { editingId = null; } });
 }
@@ -85,7 +77,7 @@ export function mount() {
   on(drawer, 'click', '[data-accessory]', btn => commit({ mascot: { ...accountById(editingId).mascot, accessory: btn.dataset.accessory } }));
   on(drawer, 'click', '[data-eyes]', btn => commit({ mascot: { ...accountById(editingId).mascot, eyes: btn.dataset.eyes } }));
   on(drawer, 'click', '[data-pick]', async btn => {
-    const folder = await pickInto(drawer, btn.dataset.pick);
+    const folder = await api.pickFolder();
     if (folder) commit({ [btn.dataset.pick]: folder });
   });
   onSelect(drawer, 'openWith', value => commit({ openWith: value }));
@@ -99,77 +91,93 @@ export function mount() {
   });
 }
 
-// ---- Add: a modal until the sign-in stepper replaces it ----
+// ---- Add: a three-step modal (service, sign-in, look) ----
 
-function addView(draft, download) {
-  const look = appearance(draft);
-  const mine = ownProfile(draft);
-  const providers = Object.entries(PROVIDER_LABELS).map(([value, label]) => ({ value, label }));
-  const missing = download ? `<a class="btn" href="${esc(download)}" target="_blank">Download ${PROVIDER_LABELS[draft.provider]} Desktop</a>` : '';
-  return `
-    <div class="modal" role="dialog" aria-modal="true" aria-label="Add account">
-      <div class="modal-head">
-        <h2>Add account</h2>
-        <button class="icon-btn" data-close aria-label="Close">${ICONS.close}</button>
-      </div>
-      <div class="modal-body stack">
-        <div class="field"><label>Service</label>${segmented('provider', providers, draft.provider)}</div>
-        ${draft.provider === 'claude' ? `<div class="field"><label>Sign-in</label>${segmented('profile', [{ value: 'own', label: 'New login' }, { value: 'shared', label: 'Current login' }], mine ? 'own' : 'shared')}</div>` : ''}
-        ${missing}
-        <div class="add-look"><div class="stack">${look.look}</div><div class="stack">${look.fields}</div></div>
-        ${advanced(draft)}
-      </div>
-      <div class="modal-foot">
-        <span class="spacer"></span>
-        ${button('Cancel', { attrs: 'data-close' })}
-        ${button('Add account', { kind: 'primary', attrs: 'data-save' })}
-      </div>
-    </div>`;
+const STEPS = ['Add account', 'Sign in', 'Make it yours'];
+const POLL_MS = 3000;
+const frame = html => `<div class="modal" role="dialog" aria-modal="true" aria-label="Add account">${html}</div>`;
+
+function stepView(s) {
+  const head = `<div class="modal-head"><h2>${STEPS[s.step]}</h2><span class="steps">${STEPS.map((_, i) => `<i class="${i <= s.step ? 'on' : ''}"></i>`).join('')}</span>`
+    + `<button class="icon-btn" data-close aria-label="Close">${ICONS.close}</button></div>`;
+  const nav = (back, next) => `<div class="modal-foot">${back ? button('Back', { kind: 'ghost', attrs: 'data-back' }) : ''}<span class="spacer"></span>`
+    + `${button('Cancel', { attrs: 'data-close' })}${button(next, { kind: 'primary', attrs: 'data-next' })}</div>`;
+  if (s.step === 0) {
+    const tiles = Object.entries(s.installs).map(([provider, info]) => `<div class="tile-wrap"><button class="tile ${s.provider === provider ? 'on' : ''}" data-provider="${provider}">`
+      + `${mascotSVG({ provider, color: provider === 'chatgpt' ? 3 : 2 }, 56)}<span>${esc(info.label)}</span></button>`
+      + `${info.desktop || info.cli ? '' : `<a class="tile-link" href="${esc(info.download)}" target="_blank">Download</a>`}</div>`).join('');
+    return frame(`${head}<div class="modal-body"><div class="tiles">${tiles}</div></div>${nav(false, 'Next')}`);
+  }
+  if (s.step === 1) {
+    const info = s.installs[s.draft.provider];
+    const locked = !info.multiDesktop && state.config.accounts.some(a => a.provider === s.draft.provider && a.id !== s.draft.id);
+    const row = (part, icon, label, { installed, signed, lockedReason }) => `<div class="lrow ${lockedReason ? 'locked' : ''}"${lockedReason ? ` data-tip="${tip(lockedReason)}"` : ''}>`
+      + `<span class="logo">${icon}</span><span class="t">${label}</span>`
+      + `${signed ? `<span class="check">${ICONS.check}</span>` : installed ? button('Sign in', { kind: 'primary sm', attrs: `data-sign-in="${part}" ${lockedReason ? 'disabled' : ''}` })
+        : `<a class="btn sm" href="${esc(info.download)}" target="_blank">Install</a>`}</div>`;
+    return frame(`${head}<div class="modal-body">`
+      + `${row('desktop', ICONS.desktop, 'Desktop app', { installed: info.desktop, signed: s.status.desktop && !locked, lockedReason: locked ? `${info.label} Desktop holds one account` : null })}`
+      + `${row('cli', ICONS.terminal, 'Terminal & VS Code', { installed: info.cli, signed: s.status.cli })}</div>${nav(true, 'Next')}`);
+  }
+  const look = appearance(s.draft);
+  return frame(`${head}<div class="modal-body"><div class="add-look"><div class="stack">${look.look}</div><div class="stack">${look.fields}</div></div></div>${nav(true, 'Done')}`);
 }
 
 async function addAccount() {
-  let draft = await api.blankAccount('claude');
-  let download = await api.downloadUrl('claude');
+  const s = { step: 0, provider: 'claude', draft: null, installs: await api.installs(), status: { cli: false, desktop: false } };
   const modal = $('#modal');
-  const draw = () => { modal.innerHTML = addView(draft, download); };
-
+  let poll = null;
+  const draw = () => { modal.innerHTML = stepView(s); };
   const readFields = () => {
     for (const input of modal.querySelectorAll('[data-field]')) {
       const value = input.value.trim();
-      if (value || input.dataset.field !== 'name') draft[input.dataset.field] = value;
+      if (value || input.dataset.field !== 'name') s.draft[input.dataset.field] = value;
     }
-    draft = withProfileFolder(draft);
   };
-  const redraw = () => { readFields(); draw(); };
-  const replaceDraft = async (provider, own) => {
-    readFields();
-    const { name, subtitle, color, mascot } = draft;
-    const fresh = await api.blankAccount(provider, own);
-    draft = provider === draft.provider ? { ...fresh, name, subtitle, color, mascot } : fresh;
-    download = await api.downloadUrl(provider);
+  const refreshStatus = async () => {
+    const status = await api.accountStatus(s.draft.id);
+    if (s.step === 1 && (status.cli !== s.status.cli || status.desktop !== s.status.desktop)) { s.status = status; draw(); }
+  };
+  const goTo = step => {
+    clearInterval(poll);
+    s.step = step;
     draw();
+    if (step === 1) { refreshStatus(); poll = setInterval(refreshStatus, POLL_MS); }
+  };
+  // The account is saved when the sign-in step opens, so its CLI home exists for the login.
+  const saveDraft = async () => {
+    const old = s.draft;
+    if (!old || old.provider !== s.provider) {
+      s.draft = await api.blankAccount(s.provider);
+      s.status = { cli: false, desktop: false };
+    }
+    await saveConfig({ accounts: [...state.config.accounts.filter(a => a.id !== old?.id), s.draft] });
+    onSaved();
   };
 
-  const close = openModal(addView(draft, download));
+  const closeModal = openModal(stepView(s));
+  const close = () => { clearInterval(poll); closeModal(); };
   modal.onclick = async e => {
-    const t = e.target.closest('button') || e.target;
+    const t = e.target.closest('button, a') || e.target;
     if (e.target === modal || t.closest('[data-close]')) return close();
-    const seg = t.closest('[data-seg]');
-    if (seg?.dataset.seg === 'provider') return replaceDraft(t.dataset.value);
-    if (seg?.dataset.seg === 'profile') return replaceDraft('claude', t.dataset.value === 'own');
-    if (t.dataset.color) { draft.color = Number(t.dataset.color); return redraw(); }
-    if (t.dataset.accessory) { draft.mascot.accessory = t.dataset.accessory; return redraw(); }
-    if (t.dataset.eyes) { draft.mascot.eyes = t.dataset.eyes; return redraw(); }
-    if (t.dataset.pick) { await pickInto(modal, t.dataset.pick); return; }
-    if (t.matches('[data-save]')) {
-      readFields();
-      await saveConfig({ accounts: [...state.config.accounts, draft] });
-      close();
-      toast(`${draft.name} added`, { icon: mascotSVG(draft, 22) });
-      onSaved(ownProfile(draft) ? draft.id : null);
+    if (t.dataset.provider) { s.provider = t.dataset.provider; return draw(); }
+    if (t.matches('[data-back]')) { if (s.step === 2) readFields(); return goTo(s.step - 1); }
+    if (t.dataset.signIn) {
+      try { await api.signIn(s.draft.id, t.dataset.signIn); } catch (err) { toast(errorText(err), { kind: 'error' }); }
+      return;
     }
+    if (t.dataset.color) { readFields(); s.draft.color = Number(t.dataset.color); return draw(); }
+    if (t.dataset.accessory) { readFields(); s.draft.mascot = { ...s.draft.mascot, accessory: t.dataset.accessory }; return draw(); }
+    if (t.dataset.eyes) { readFields(); s.draft.mascot = { ...s.draft.mascot, eyes: t.dataset.eyes }; return draw(); }
+    if (!t.matches('[data-next]')) return;
+    if (s.step === 0) { await saveDraft(); return goTo(1); }
+    if (s.step === 1) return goTo(2);
+    readFields();
+    await saveConfig({ accounts: state.config.accounts.map(a => (a.id === s.draft.id ? s.draft : a)) });
+    close();
+    toast(`${s.draft.name} added`, { icon: mascotSVG(s.draft, 22) });
+    onSaved();
   };
-  setTimeout(() => $('[data-field="name"]', modal)?.focus(), 30);
 }
 
 export const openEditor = id => (id ? editAccount(id) : addAccount());

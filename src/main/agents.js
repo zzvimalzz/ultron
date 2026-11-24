@@ -3,26 +3,26 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { writeJson } = require('../hub/files');
+const { CLIS } = require('../hub/cli');
 
 const NAME = 'ultron-hub';
 // The server runs outside Electron (Node mode), which can't read inside app.asar.
 const SERVER = path.join(__dirname, '..', 'hub', 'server.js').replace(`app.asar${path.sep}`, `app.asar.unpacked${path.sep}`);
 const SKILLS = path.join(__dirname, '..', 'hub', 'skills');
 const MARKER = '<!-- Installed by Ultron -->';
-const DEFAULT_HOMES = { claude: path.join(os.homedir(), '.claude'), chatgpt: path.join(os.homedir(), '.codex') };
 
 const serverEntry = provider => ({ command: process.execPath, args: [SERVER], env: { ELECTRON_RUN_AS_NODE: '1', ULTRON_PROVIDER: provider } });
 
 function agentHomes(accounts) {
   const key = home => path.resolve(home).toLowerCase();
-  const homes = new Map(Object.entries(DEFAULT_HOMES).map(([provider, home]) => [key(home), { provider, home }]));
+  const homes = new Map(Object.entries(CLIS).map(([provider, cli]) => [key(cli.defaultHome), { provider, home: cli.defaultHome }]));
   for (const a of accounts.filter(x => x.cliHome && !homes.has(key(x.cliHome)))) homes.set(key(a.cliHome), { provider: a.provider, home: a.cliHome });
   return [...homes.values()].filter(h => fs.existsSync(h.home));
 }
 
 // Claude Code keeps user-level MCP servers in ~/.claude.json, or inside CLAUDE_CONFIG_DIR when set.
 function setClaudeServer(home, entry) {
-  const file = home === DEFAULT_HOMES.claude ? path.join(os.homedir(), '.claude.json') : path.join(home, '.claude.json');
+  const file = home === CLIS.claude.defaultHome ? path.join(os.homedir(), '.claude.json') : path.join(home, '.claude.json');
   const cfg = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {};
   const servers = { ...cfg.mcpServers };
   if (entry) servers[NAME] = { type: 'stdio', ...entry };

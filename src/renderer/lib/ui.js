@@ -89,7 +89,7 @@ function toggleSelect(el) {
   const menu = document.createElement('div');
   menu.className = 'menu';
   menu.setAttribute('role', 'listbox');
-  menu.innerHTML = items.map(o => `<button role="option" data-value="${esc(o.value)}" aria-selected="${String(o.value) === el.dataset.value}">`
+  menu.innerHTML = items.map(o => `<button role="option" data-value="${esc(o.value)}" aria-selected="${String(o.value) === el.dataset.value}"${o.disabled ? ` disabled data-tip="${tip(o.disabled)}"` : ''}>`
     + `<span class="menu-check">${String(o.value) === el.dataset.value ? ICONS.check : ''}</span>${esc(o.label)}</button>`).join('');
   el.appendChild(menu);
   $('.select-btn', el).setAttribute('aria-expanded', 'true');
@@ -258,4 +258,6 @@ export const ICONS = {
   info: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 7.2v3.6M8 5.2v.1"/></svg>',
   folder: '<svg viewBox="0 0 16 16"><path d="M2 4.5a1 1 0 0 1 1-1h3l1.5 1.5H13a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/></svg>',
   close: '<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
+  desktop: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="8" rx="1.5"/><path d="M6 14h4M8 11v3"/></svg>',
+  terminal: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 7l2 1.5L5 10M8.5 10h2.5"/></svg>',
 };
