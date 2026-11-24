@@ -13,7 +13,7 @@ const planShort = label => {
 
 // The badge on a card or in the drawer. A signed-out account shows none.
 export function planBadge(live) {
-  if (live.signedIn === false) return '';
+  if (live.launchOnly || live.signedIn === false || !live.tier) return '';
   if (live.detecting && !live.plan) return skeleton('36px', '20px');
   if (live.tier === 'unknown') return badge('Plan?', { tone: 'warn', attrs: 'data-plan-ask role="button" tabindex="0"' });
   const text = live.answered ? TIER_NAMES[live.tier] : planShort(live.plan);

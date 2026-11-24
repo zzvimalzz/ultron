@@ -45,7 +45,7 @@ function cliEnv(account, base = process.env) {
 }
 
 // Existence only: the credentials file holds tokens and is never read here.
-const signedIn = account => exists(path.join(homeOf(account), CLIS[account.provider].credentials));
+const signedIn = account => Boolean(CLIS[account.provider]) && exists(path.join(homeOf(account), CLIS[account.provider].credentials));
 
 // The chosen model and effort as CLI arguments, for the terminal and for headless runs.
 function modelArgs(account) {

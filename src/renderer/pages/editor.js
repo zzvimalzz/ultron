@@ -75,15 +75,18 @@ function ultronSection(account) {
 const openWithSection = account => section('Open with', `<div class="radios" role="radiogroup">${(state.targets[account.id] || []).map(t =>
   `<button class="radio" role="radio" aria-checked="${t.id === account.openWith}" data-target="${t.id}"${t.locked ? ` disabled data-tip="${tip(t.locked)}"` : ''}><i></i>${esc(t.label)}</button>`).join('')}</div>`);
 
+const crewSections = account => planSection(account)
+  + modelSections(account)
+  + section('Roles', `<div class="chips">${state.info.roles.map(r => chip(r.label, { on: account.roles.includes(r.id), attrs: `data-role="${r.id}"` })).join('')}</div>`)
+  + ultronSection(account);
+
 function drawerBody(account) {
   const look = appearance(account);
-  return planSection(account)
-    + modelSections(account)
-    + section('Roles', `<div class="chips">${state.info.roles.map(r => chip(r.label, { on: account.roles.includes(r.id), attrs: `data-role="${r.id}"` })).join('')}</div>`)
-    + ultronSection(account)
+  const launchOnly = state.overview[account.id]?.launchOnly;
+  return (launchOnly ? '' : crewSections(account))
     + openWithSection(account)
     + `<div class="dsec"><span class="cap">Appearance</span>${look.look}${look.fields}</div>`
-    + `<div class="dsec">${advanced(account)}</div>`
+    + (launchOnly ? '' : `<div class="dsec">${advanced(account)}</div>`)
     + (state.config.accounts.length > 1 ? `<div class="dsec">${button('Remove account', { kind: 'ghost danger', attrs: 'data-remove' })}</div>` : '');
 }
 
@@ -175,12 +178,16 @@ function stepView(s) {
     + `${button('Cancel', { attrs: 'data-close' })}${button(next, { kind: 'primary', attrs: 'data-next' })}</div>`;
   if (s.step === 0) {
     const tiles = Object.entries(s.installs).map(([provider, info]) => `<div class="tile-wrap"><button class="tile ${s.provider === provider ? 'on' : ''}" data-provider="${provider}">`
-      + `${mascotSVG({ provider, color: provider === 'chatgpt' ? 3 : 2 }, 56)}<span>${esc(info.label)}</span></button>`
-      + `${info.desktop || info.cli ? '' : `<a class="tile-link" href="${esc(info.download)}" target="_blank">Download</a>`}</div>`).join('');
+      + `${mascotSVG({ provider, color: info.color || 2 }, 56)}<span>${esc(info.label)}</span></button>`
+      + `${info.launchOnly || info.desktop || info.cli ? '' : `<a class="tile-link" href="${esc(info.download)}" target="_blank">Download</a>`}</div>`).join('');
     return frame(`${head}<div class="modal-body"><div class="tiles">${tiles}</div></div>${nav(false, 'Next')}`);
   }
   if (s.step === 1) {
     const info = s.installs[s.draft.provider];
+    if (info.launchOnly) {
+      return frame(`${head}<div class="modal-body"><div class="lrow"><span class="logo">${ICONS.desktop}</span><span class="t">Web</span>`
+        + `${button('Open', { kind: 'primary sm', attrs: 'data-sign-in="desktop"' })}</div></div>${nav(true, 'Next')}`);
+    }
     const locked = !info.multiDesktop && state.config.accounts.some(a => a.provider === s.draft.provider && a.id !== s.draft.id);
     const row = (part, icon, label, { installed, signed, lockedReason }) => `<div class="lrow ${lockedReason ? 'locked' : ''}"${lockedReason ? ` data-tip="${tip(lockedReason)}"` : ''}>`
       + `<span class="logo">${icon}</span><span class="t">${label}</span>`

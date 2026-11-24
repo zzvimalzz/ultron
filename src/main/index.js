@@ -4,7 +4,7 @@ const path = require('path');
 const { app, BrowserWindow, Notification, ipcMain, nativeTheme, shell, dialog } = require('electron');
 const { createStore, blankAccount } = require('./config');
 const { resolveDataDir, isRunning, profileReady, lastActivityAt } = require('./profiles');
-const { installs, availableTargets, openAccount, signIn } = require('./targets');
+const { installs, availableTargets, openAccount, signIn, isLaunchOnly } = require('./targets');
 const { signedIn } = require('../hub/cli');
 const { createUsage } = require('./usage');
 const { connectAgents } = require('./agents');
@@ -84,7 +84,7 @@ async function overview() {
     const lastOpened = running ? Date.now() : Math.max(a.lastOpened || 0, lastActivityAt(a.dataDir), day ? day.lastActivity[a.id] || 0 : 0);
     const detected = detection.tierOf(a);
     return [a.id, {
-      running, working, lastOpened, signedIn: signedIn(a), tokens: used?.total, activeMs: used?.activeMs,
+      running, working, lastOpened, signedIn: signedIn(a), launchOnly: isLaunchOnly(a.provider), tokens: used?.total, activeMs: used?.activeMs,
       plan: detection.planOf(a), tier: crew.effectiveTier(a, detected), eligible: crew.eligible(a, detected),
       answered: detected === 'unknown' && Boolean(a.planAnswer), detecting: detection.detecting(a.id), checkedAt: detection.checkedAt(a),
     }];

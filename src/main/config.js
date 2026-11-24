@@ -2,12 +2,13 @@
 const fs = require('fs');
 const path = require('path');
 const { LOCAL, ROAMING, findShortcuts, resolveDataDir } = require('./profiles');
-const { PROVIDERS, isInstalled } = require('./targets');
+const { PROVIDERS, isInstalled, isLaunchOnly } = require('./targets');
 const { HUB_DIR } = require('../hub/files');
 const { DEFAULT_ROLES } = require('../hub/roles');
 
 const VERSION = 8;
 const HOMES_DIR = path.join(HUB_DIR, 'homes');
+const defaultRoles = provider => [...(DEFAULT_ROLES[provider] || [])];
 
 function defaultClaudeDataDir() {
   const base = path.join(LOCAL, 'Claude-Data');
@@ -22,9 +23,9 @@ function account(provider, index, fields) {
   return {
     id: `${provider}-${Date.now().toString(36)}-${index}`,
     provider,
-    name: provider === 'chatgpt' ? 'ChatGPT' : `Claude ${index + 1}`,
+    name: provider === 'chatgpt' ? 'ChatGPT' : `${PROVIDERS[provider].label} ${index + 1}`,
     subtitle: '',
-    color: provider === 'chatgpt' ? 3 : [2, 1, 7, 5, 4, 8][index % 6],
+    color: PROVIDERS[provider].color || [2, 1, 7, 5, 4, 8][index % 6],
     mascot: { accessory: 'none', eyes: 'normal' },
     args: '',
     dataDir: '',
@@ -34,8 +35,8 @@ function account(provider, index, fields) {
     planAnswer: null,
     model: '',
     effort: '',
-    roles: [...DEFAULT_ROLES[provider]],
-    inCrew: true,
+    roles: defaultRoles(provider),
+    inCrew: !isLaunchOnly(provider),
     maxRuns: 2,
     ...fields,
   };
@@ -57,6 +58,7 @@ function freeClaudeProfile(accounts) {
 function blankAccount(provider, accounts, ownProfile) {
   const index = accounts.filter(a => a.provider === provider).length;
   const fields = { mascot: { accessory: 'none', eyes: 'happy' } };
+  if (isLaunchOnly(provider)) return account(provider, index, fields);
   let created;
   if (provider === 'chatgpt') {
     created = account(provider, index, { ...fields, dataDir: index ? '' : chatgptDataDir(), ...(index ? { openWith: PROVIDERS.chatgpt.cliTarget } : {}) });
@@ -92,7 +94,7 @@ function migrate(config) {
     a.planAnswer ??= null;
     a.model ??= '';
     a.effort ??= '';
-    a.roles ??= [...DEFAULT_ROLES[a.provider]];
+    a.roles ??= defaultRoles(a.provider);
     a.inCrew ??= true;
     a.maxRuns ??= 2;
     delete a.launches;

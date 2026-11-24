@@ -8,10 +8,14 @@ const { CLIS, exists, which, cliEnv, modelArgs } = require('../hub/cli');
 const { HUB_DIR } = require('../hub/files');
 
 // multiDesktop: Claude runs one window per --user-data-dir; ChatGPT is a single-instance MSIX.
+// A provider with no CLIS row is launch-only: it opens in the browser and never joins the crew (see .doc/notes/gemini.md and grok.md).
 const PROVIDERS = {
   claude: { label: 'Claude', web: 'https://claude.ai', download: 'https://claude.ai/download', defaultTarget: 'claude-desktop', cliTarget: 'claude-cli', multiDesktop: true },
-  chatgpt: { label: 'ChatGPT', web: 'https://chatgpt.com', download: 'https://chatgpt.com/download', defaultTarget: 'chatgpt-desktop', cliTarget: 'codex-cli', multiDesktop: false },
+  chatgpt: { label: 'ChatGPT', web: 'https://chatgpt.com', download: 'https://chatgpt.com/download', defaultTarget: 'chatgpt-desktop', cliTarget: 'codex-cli', multiDesktop: false, color: 3 },
+  gemini: { label: 'Gemini', web: 'https://gemini.google.com', defaultTarget: 'web', multiDesktop: true, color: 7 },
+  grok: { label: 'Grok', web: 'https://grok.com', defaultTarget: 'web', multiDesktop: true, color: 8 },
 };
+const isLaunchOnly = provider => !CLIS[provider];
 
 // Microsoft Store build first, then the standalone installer's location.
 const CLAUDE_EXES = [
@@ -95,6 +99,7 @@ function lockedReason(account, accounts, target) {
 
 function availableTargets(account, accounts) {
   return TARGETS.filter(t => !t.provider || t.provider === account.provider)
+    .filter(t => !(t.cli && isLaunchOnly(account.provider)))
     .filter(t => t.locate())
     .map(t => ({ id: t.id, label: t.label, cli: Boolean(t.cli), locked: lockedReason(account, accounts, t) }));
 }
@@ -120,9 +125,9 @@ async function signIn(account, part, accounts) {
 }
 
 function installs() {
-  return Object.fromEntries(Object.entries(PROVIDERS).map(([provider, p]) => [provider, {
-    label: p.label, desktop: isInstalled(provider), cli: Boolean(which(CLIS[provider].command)), download: p.download, multiDesktop: p.multiDesktop,
-  }]));
+  return Object.fromEntries(Object.entries(PROVIDERS).map(([provider, p]) => [provider, isLaunchOnly(provider)
+    ? { label: p.label, color: p.color, launchOnly: true }
+    : { label: p.label, color: p.color, desktop: isInstalled(provider), cli: Boolean(which(CLIS[provider].command)), download: p.download, multiDesktop: p.multiDesktop }]));
 }
 
-module.exports = { PROVIDERS, inTerminal, isInstalled, installs, availableTargets, openAccount, signIn };
+module.exports = { PROVIDERS, isLaunchOnly, inTerminal, isInstalled, installs, availableTargets, openAccount, signIn };

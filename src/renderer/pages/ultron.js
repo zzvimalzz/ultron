@@ -155,7 +155,8 @@ function benchHtml() {
     const account = accountFor(a.id);
     const mini = `<span class="mini" style="--account:${colorHex(account.color)}">${mascotSVG(account, 20)}</span>`;
     if (!a.eligible) {
-      return `<span class="bnode lock" data-bench="${a.id}" data-tip="${tipRows(a.name, [['Not in crew', INELIGIBLE[a.tier] || INELIGIBLE.unknown]])}">${mini}${esc(a.name)}<i class="lock-icon">${ICONS.lock}</i></span>`;
+      const why = a.launchOnly ? ['Crew', 'Launch only'] : ['Not in crew', INELIGIBLE[a.tier] || INELIGIBLE.unknown];
+      return `<span class="bnode lock" data-bench="${a.id}" data-tip="${tipRows(a.name, [why])}">${mini}${esc(a.name)}<i class="lock-icon">${ICONS.lock}</i></span>`;
     }
     const used = Math.min(runs[a.id] || 0, a.maxRuns || 1);
     const dots = Array.from({ length: a.maxRuns || 1 }, (_, i) => `<i class="${i < used ? 'f' : ''}"></i>`).join('');
@@ -252,7 +253,7 @@ function timelineHtml() {
 function head() {
   const lead = leader();
   const account = accountFor(lead?.id);
-  const menu = menuOpen ? `<div class="menu" role="menu">${data.agents.map(a => `<button role="menuitem" data-set-leader="${a.id}" ${a.eligible ? '' : `disabled data-tip="${tip(INELIGIBLE[a.tier] || INELIGIBLE.unknown)}"`}>`
+  const menu = menuOpen ? `<div class="menu" role="menu">${data.agents.map(a => `<button role="menuitem" data-set-leader="${a.id}" ${a.eligible ? '' : `disabled data-tip="${tip(a.launchOnly ? 'Launch only' : INELIGIBLE[a.tier] || INELIGIBLE.unknown)}"`}>`
     + `<span class="mini" style="--account:${colorHex(accountFor(a.id).color)}">${mascotSVG(accountFor(a.id), 18)}</span>${esc(a.name)}<span class="hint">${a.id === data.leader ? ICONS.check : a.eligible ? '' : ICONS.lock}</span></button>`).join('')}</div>` : '';
   const chip = lead ? `<span class="plan-wrap"><button class="btn leader-chip" data-leader-menu><span class="mini" style="--account:${colorHex(account.color)}">${mascotSVG(account, 18)}</span>${esc(account.name)}${ICONS.chevron}</button>${menu}</span>` : '';
   const connect = data.connected ? button('Disconnect', { attrs: 'data-connect="off"' })
@@ -349,10 +350,11 @@ function benchDrawer(id) {
   const agent = data.agents.find(a => a.id === id);
   const account = accountFor(id);
   const model = [agent.model || 'Default', agent.effort].filter(Boolean).join(' · ');
-  openDrawer(`<div class="dsec"><div class="drow"><span class="muted">Plan</span><span>${esc(state.overview[id]?.plan || agent.tier || 'Unknown')}</span></div>`
+  const details = agent.launchOnly ? '<div class="dsec"><div class="drow"><span class="muted">Crew</span><span>Launch only</span></div></div>'
+    : `<div class="dsec"><div class="drow"><span class="muted">Plan</span><span>${esc(state.overview[id]?.plan || agent.tier || 'Unknown')}</span></div>`
     + `<div class="drow"><span class="muted">Model</span><span>${esc(model)}</span></div><div class="drow"><span class="muted">Runs</span><span>${data.runs?.[id] || 0} of ${agent.maxRuns || 1}</span></div>`
-    + `<div class="drow"><span class="muted">Roles</span><span>${esc(agent.roles.map(r => state.info.roles.find(x => x.id === r)?.label || r).join(', '))}</span></div></div>`
-    + `<div class="dsec acts">${agent.eligible && id !== data.leader ? button('Make leader', { kind: 'sm primary', attrs: `data-make-leader="${id}"` }) : ''}${button('Account settings', { kind: 'sm', attrs: `data-account="${id}"` })}</div>`,
+    + `<div class="drow"><span class="muted">Roles</span><span>${esc(agent.roles.map(r => state.info.roles.find(x => x.id === r)?.label || r).join(', '))}</span></div></div>`;
+  openDrawer(`${details}<div class="dsec acts">${agent.eligible && id !== data.leader ? button('Make leader', { kind: 'sm primary', attrs: `data-make-leader="${id}"` }) : ''}${button('Account settings', { kind: 'sm', attrs: `data-account="${id}"` })}</div>`,
   { title: account.name, lead: `<span class="mini" style="--account:${colorHex(account.color)}">${mascotSVG(account, 24)}</span>` });
 }
 

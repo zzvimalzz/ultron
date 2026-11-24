@@ -85,3 +85,28 @@ test('migrate adds the model, roles and crew fields and keeps values already set
   assert.deepStrictEqual([claude.model, claude.effort, claude.roles, claude.inCrew, claude.maxRuns], ['opus', '', ['qa'], true, 2]);
   assert.deepStrictEqual(chatgpt.roles, ['code', 'images', 'research', 'review']);
 });
+
+test('Gemini and Grok are launch-only: web target only, no CLI home, never in the crew', () => {
+  const { installs, isLaunchOnly } = require('../src/main/targets');
+  const { publish, crewMap, leaderId } = require('../src/main/crew');
+  const gemini = blankAccount('gemini', []);
+  const grok = blankAccount('grok', [gemini]);
+  const claude = { ...blankAccount('claude', []), id: 'claude-1' };
+  assert.deepStrictEqual([isLaunchOnly('gemini'), isLaunchOnly('grok'), isLaunchOnly('claude')], [true, true, false]);
+  assert.deepStrictEqual([gemini.name, grok.name, gemini.openWith, gemini.cliHome, gemini.inCrew, gemini.roles], ['Gemini 1', 'Grok 1', 'web', '', false, []]);
+  assert.deepStrictEqual(availableTargets(gemini, [gemini, grok]).map(t => t.id), ['web']);
+  assert.strictEqual(signedIn(gemini), false);
+  assert.deepStrictEqual(installs().gemini, { label: 'Gemini', color: 7, launchOnly: true });
+
+  const config = { accounts: [gemini, grok, claude], crew: { leader: gemini.id }, memory: { dir: TEMP }, connected: false };
+  assert.strictEqual(leaderId({ ...config, crew: { leader: null } }), 'claude-1');
+  publish(config, {}, []);
+  const published = JSON.parse(fs.readFileSync(path.join(TEMP, '.ultron', 'crew.json'), 'utf8'));
+  assert.deepStrictEqual(published.agents.map(a => a.id), ['claude-1']);
+  assert.deepStrictEqual(crewMap(config, {}, []).agents.map(a => [a.id, a.launchOnly, a.eligible]), [[gemini.id, true, false], [grok.id, true, false], ['claude-1', false, false]]);
+});
+
+test('migrate gives a launch-only account no roles and keeps it out of the crew', () => {
+  const [gemini] = migrate({ accounts: [{ provider: 'gemini' }] }).accounts;
+  assert.deepStrictEqual([gemini.roles, gemini.openWith], [[], 'web']);
+});

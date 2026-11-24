@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { projectName } = require('./usage/aggregate');
 const { homeOf } = require('../hub/cli');
+const { isLaunchOnly } = require('./targets');
 const { MEMORY_DIR, CREW_FILE, SESSIONS_FILE, EVENTS_FILE, readJson, writeJson, recentEvents } = require('../hub/files');
 
 const FEED_MS = 24 * 3600 * 1000;
@@ -10,7 +11,8 @@ const norm = p => (p ? path.resolve(p).toLowerCase() : '');
 
 function leaderId(config) {
   if (config.accounts.some(a => a.id === config.crew.leader)) return config.crew.leader;
-  return (config.accounts.find(a => a.provider === 'claude') || config.accounts[0])?.id || null;
+  const crewable = config.accounts.filter(a => !isLaunchOnly(a.provider));
+  return (crewable.find(a => a.provider === 'claude') || crewable[0])?.id || null;
 }
 
 // A detected plan wins; the user's answer only fills in while detection can't tell.
@@ -19,7 +21,7 @@ const eligible = (account, detected) => account.inCrew !== false && ['paid', 'te
 
 const standing = live => ({ tier: live?.tier, eligible: Boolean(live?.eligible) });
 const agentOf = (a, overview) => ({
-  id: a.id, name: a.name, provider: a.provider, ...standing(overview[a.id]),
+  id: a.id, name: a.name, provider: a.provider, launchOnly: isLaunchOnly(a.provider), ...standing(overview[a.id]),
   model: a.model, effort: a.effort, roles: a.roles, maxRuns: a.maxRuns, tokens24h: overview[a.id]?.tokens || 0, status: statusOf(overview[a.id]),
 });
 
@@ -32,7 +34,7 @@ function publish(config, overview, sessions) {
   const crew = {
     leader: leaderId(config),
     memoryDir: config.memory.dir || MEMORY_DIR,
-    agents: config.accounts.map(a => ({ ...agentOf(a, overview), home: homeOf(a) })),
+    agents: config.accounts.filter(a => !isLaunchOnly(a.provider)).map(a => ({ ...agentOf(a, overview), home: homeOf(a) })),
   };
   const active = sessions.filter(s => !s.parent).map(s => ({ agent: s.account, provider: s.provider, cwd: s.cwd, last: s.lastActivity }));
   const text = JSON.stringify([crew, active]);

@@ -20,6 +20,8 @@ Usage covers Claude Code and Codex sessions stored on this PC. Chat conversation
 
 On first launch Ultron adds the Claude and ChatGPT desktop apps it finds. To add another account, choose **Add account**: pick the service, sign in to its desktop app and terminal, then give it a look. Every new account gets its own CLI folder under `~/.ultron/homes`, so several Claude and Codex accounts run side by side in the terminal and in VS Code. ChatGPT Desktop holds one account, so extra ChatGPT accounts open in the CLI.
 
+**Gemini and Grok** are launch-only: they open in your browser and have no plan badge. They stay out of the crew because neither vendor's CLI can keep separate accounts apart or report a plan that Ultron can read.
+
 ## Release
 
 Push a version tag and GitHub Actions builds the installer and publishes the release:
