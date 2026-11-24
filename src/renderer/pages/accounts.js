@@ -3,10 +3,12 @@ import * as fmt from '../lib/format.js';
 import { colorHex, mascotSVG } from '../lib/mascots.js';
 import { ICONS, button, errorText, flip, phase, tip, toast } from '../lib/ui.js';
 import { api, state, accountById, loadTargets } from '../lib/state.js';
+import { planBadge, planChoices } from '../lib/plan.js';
 import { openEditor } from './editor.js';
 
 let root;
 let menuFor = null;
+let askFor = null;
 
 const targetsOf = account => state.targets[account.id] || [];
 
@@ -14,6 +16,13 @@ function openWithMenu(account) {
   return `<div class="menu" role="menu">${targetsOf(account).map(t => `<button role="menuitemradio" aria-checked="${t.id === account.openWith}" data-open-with="${t.id}"`
     + `${t.locked ? ` disabled data-tip="${tip(t.locked)}"` : ''}>`
     + `<span class="menu-check">${t.id === account.openWith ? ICONS.check : ''}</span>${esc(t.label)}</button>`).join('')}</div>`;
+}
+
+function planAsk(account, live) {
+  const badge = planBadge(live);
+  if (!badge) return '';
+  const menu = askFor === account.id ? `<div class="menu" role="menu">${planChoices.map(([tier, label]) => `<button role="menuitem" data-plan-pick="${tier}">${label}</button>`).join('')}</div>` : '';
+  return `<span class="plan-wrap">${badge}${menu}</span>`;
 }
 
 function card(account, index) {
@@ -37,7 +46,7 @@ function card(account, index) {
       <div class="acct-body">
         <div class="acct-title">
           <div class="acct-names">
-            <div class="acct-name">${esc(account.name)}</div>
+            <div class="acct-line"><div class="acct-name">${esc(account.name)}</div>${planAsk(account, live)}</div>
             ${account.subtitle ? `<div class="acct-sub">${esc(account.subtitle)}</div>` : ''}
           </div>
           ${needsSignIn ? `<span class="acct-action">${button('Sign in', { kind: 'primary sm', attrs: 'data-sign-in' })}</span>` : `<div class="split">
@@ -104,8 +113,20 @@ export function mount(el) {
   on(root, 'click', '[data-sign-in]', async btn => {
     try { await api.signIn(btn.closest('[data-account]').dataset.account, 'cli'); } catch (err) { toast(errorText(err), { kind: 'error' }); }
   });
+  on(root, 'click', '[data-plan-ask]', btn => {
+    const id = btn.closest('[data-account]').dataset.account;
+    askFor = askFor === id ? null : id;
+    render();
+  });
+  on(root, 'click', '[data-plan-pick]', async btn => {
+    const id = btn.closest('[data-account]').dataset.account;
+    askFor = null;
+    state.config = await api.updateAccount(id, { planAnswer: btn.dataset.planPick });
+    state.overview = await api.overview();
+    render();
+  });
   on(root, 'click', '[data-account]', (el, e) => {
-    if (!e.target.closest('.menu, [data-menu], [data-edit], [data-sign-in]')) launch(el.dataset.account);
+    if (!e.target.closest('.menu, [data-menu], [data-edit], [data-sign-in], [data-plan-ask]')) launch(el.dataset.account);
   });
   on(root, 'keydown', '[data-account]', (el, e) => {
     if (e.target !== el || (e.key !== 'Enter' && e.key !== ' ')) return;
@@ -113,6 +134,6 @@ export function mount(el) {
     launch(el.dataset.account);
   });
   document.addEventListener('click', e => {
-    if (menuFor && !e.target.closest('.split')) { menuFor = null; render(); }
+    if ((menuFor && !e.target.closest('.split')) || (askFor && !e.target.closest('.plan-wrap'))) { menuFor = null; askFor = null; render(); }
   });
 }

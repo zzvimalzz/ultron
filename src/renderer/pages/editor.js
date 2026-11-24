@@ -1,11 +1,12 @@
 import { $, esc, on } from '../lib/dom.js';
 import { ACCESSORIES, COLORS, EYES, colorHex, mascotSVG } from '../lib/mascots.js';
 import { ICONS, button, closeDrawer, errorText, onSelect, openDrawer, openModal, select, tip, toast, updateDrawer } from '../lib/ui.js';
+import { planBadge, planChoices } from '../lib/plan.js';
+import { ago } from '../lib/format.js';
 import { api, state, accountById, loadTargets, saveConfig } from '../lib/state.js';
 
 let onSaved = () => {};
 export const setEditorListener = fn => { onSaved = fn; };
-
 
 const field = (name, label, value, extra = '') =>
   `<div class="field"><label>${label}</label><input class="input" data-field="${name}" value="${esc(value)}" spellcheck="false" aria-label="${label}" ${extra}></div>`;
@@ -37,14 +38,23 @@ const withProfileFolder = account => {
   return custom && !account.dataDir ? { ...account, dataDir: custom[2] } : account;
 };
 
-// ---- Edit: the account drawer saves each change as it is made ----
-
 let editingId = null;
+
+function planSection(account) {
+  const live = state.overview[account.id] || {};
+  if (live.signedIn === false) return '';
+  const asking = live.tier === 'unknown' || live.answered;
+  return `<div class="dsec"><span class="cap">Plan</span><div class="plan-row">${planBadge(live)}`
+    + `<span class="when">${live.checkedAt ? `Checked ${ago(live.checkedAt)}` : ''}</span>`
+    + `${button('Check again', { kind: 'sm', attrs: `data-detect ${live.detecting ? 'disabled' : ''}` })}</div>`
+    + `${asking ? `<div class="picks plans">${planChoices.map(([tier, label]) => `<button class="pick ${account.planAnswer === tier ? 'on' : ''}" data-plan-answer="${tier}">${label}</button>`).join('')}</div>` : ''}</div>`;
+}
 
 function drawerBody(account) {
   const look = appearance(account);
   const targets = (state.targets[account.id] || []).map(t => ({ value: t.id, label: t.label, disabled: t.locked }));
-  return `<div class="dsec"><span class="cap">Appearance</span>${look.look}${look.fields}</div>`
+  return planSection(account)
+    + `<div class="dsec"><span class="cap">Appearance</span>${look.look}${look.fields}</div>`
     + `<div class="dsec"><span class="cap">Open with</span>${select('openWith', targets, account.openWith)}</div>`
     + `<div class="dsec">${advanced(account)}</div>`
     + (state.config.accounts.length > 1 ? `<div class="dsec">${button('Remove account', { kind: 'ghost danger', attrs: 'data-remove' })}</div>` : '');
@@ -80,6 +90,17 @@ export function mount() {
     const folder = await api.pickFolder();
     if (folder) commit({ [btn.dataset.pick]: folder });
   });
+  on(drawer, 'click', '[data-detect]', async () => {
+    state.overview = await api.detect(editingId);
+    updateDrawer(drawerBody(accountById(editingId)));
+    onSaved();
+  });
+  on(drawer, 'click', '[data-plan-answer]', async btn => {
+    state.config = await api.updateAccount(editingId, { planAnswer: btn.dataset.planAnswer });
+    state.overview = await api.overview();
+    updateDrawer(drawerBody(accountById(editingId)));
+    onSaved();
+  });
   onSelect(drawer, 'openWith', value => commit({ openWith: value }));
   on(drawer, 'click', '[data-remove]', async btn => {
     if (btn.dataset.confirm !== '1') { btn.dataset.confirm = '1'; btn.textContent = 'Click again to remove'; return; }
@@ -90,8 +111,6 @@ export function mount() {
     onSaved();
   });
 }
-
-// ---- Add: a three-step modal (service, sign-in, look) ----
 
 const STEPS = ['Add account', 'Sign in', 'Make it yours'];
 const POLL_MS = 3000;

@@ -304,6 +304,15 @@ h2 { font: 600 var(--fs-title)/var(--lh-title) var(--font); margin: 0; }
 .acct-title { display: flex; align-items: center; gap: var(--sp-2); min-height: 32px; }
 .acct-names { min-width: 0; }
 .acct-name { font: 600 var(--fs-title)/var(--lh-title) var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.flowchart .node.ineligible { opacity: .5; }
+.acct-line { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.plan-wrap { position: relative; flex: none; display: inline-flex; }
+.plan-wrap .menu { right: auto; left: 0; min-width: 120px; transform-origin: top left; }
+.badge[data-plan-ask] { cursor: pointer; }
+.badge.answered { text-decoration: underline dotted; text-underline-offset: 3px; }
+.plan-row { display: flex; align-items: center; gap: var(--sp-3); min-height: 32px; }
+.plan-row .when { color: var(--text-3); font-size: var(--fs-caption); }
+.plan-row .btn { margin-left: auto; }
 .acct-sub { color: var(--text-3); font-size: var(--fs-small); margin-top: 2px; }
 .split { position: relative; display: inline-flex; margin-left: auto; height: 28px; border-radius: var(--r-sm); border: 1px solid var(--border-strong); flex: none; }
 .split-main { display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; font: 500 var(--fs-caption)/1 var(--font); border-radius: 7px 0 0 7px; transition: background var(--dur-1) var(--ease-out); }
@@ -443,6 +452,8 @@ table.list td.name { font-weight: 500; overflow: hidden; text-overflow: ellipsis
 .swatch.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--text); }
 .picks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .pick { height: 56px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 11px; color: var(--text-2); transition: border-color var(--dur-1) var(--ease-out), background var(--dur-1) var(--ease-out), transform var(--dur-1) var(--ease-out); }
+.picks.plans { grid-template-columns: repeat(3, 1fr); margin-top: var(--sp-3); }
+.picks.plans .pick { height: 32px; flex-direction: row; font-size: var(--fs-small); }
 .pick svg { width: 30px; height: auto; }
 .pick:hover { border-color: var(--border-strong); }
 .pick:active { transform: scale(.97); }

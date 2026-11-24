@@ -5,7 +5,7 @@ const { LOCAL, ROAMING, findShortcuts, resolveDataDir } = require('./profiles');
 const { PROVIDERS, isInstalled } = require('./targets');
 const { HUB_DIR } = require('../hub/files');
 
-const VERSION = 4;
+const VERSION = 5;
 const HOMES_DIR = path.join(HUB_DIR, 'homes');
 
 function defaultClaudeDataDir() {
@@ -30,6 +30,7 @@ function account(provider, index, fields) {
     cliHome: '',
     openWith: PROVIDERS[provider].defaultTarget,
     lastOpened: 0,
+    planAnswer: null,
     ...fields,
   };
 }
@@ -82,6 +83,7 @@ function migrate(config) {
     a.provider ||= 'claude';
     a.openWith ||= PROVIDERS[a.provider].defaultTarget;
     a.cliHome ??= '';
+    a.planAnswer ??= null;
     delete a.launches;
     delete a.target;
     delete a.pathHints;

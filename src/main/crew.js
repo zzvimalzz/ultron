@@ -13,6 +13,11 @@ function leaderId(config) {
   return (config.accounts.find(a => a.provider === 'claude') || config.accounts[0])?.id || null;
 }
 
+// A detected plan wins; the user's answer only fills in while detection can't tell.
+const effectiveTier = (account, detected = 'unknown') => (detected !== 'unknown' ? detected : account.planAnswer || 'unknown');
+const eligible = (account, detected) => ['paid', 'team'].includes(effectiveTier(account, detected));
+
+const standing = live => ({ tier: live?.tier, eligible: Boolean(live?.eligible) });
 const statusOf = live => (live?.working ? 'working' : live?.running ? 'open' : 'idle');
 
 // crew.json and sessions.json let the hub server name the leader, route messages and tell
@@ -22,7 +27,7 @@ function publish(config, overview, sessions) {
   const crew = {
     leader: leaderId(config),
     memoryDir: config.crew.memoryDir,
-    agents: config.accounts.map(a => ({ id: a.id, name: a.name, provider: a.provider, strengths: PROVIDERS[a.provider].strengths, status: statusOf(overview[a.id]) })),
+    agents: config.accounts.map(a => ({ id: a.id, name: a.name, provider: a.provider, strengths: PROVIDERS[a.provider].strengths, ...standing(overview[a.id]), status: statusOf(overview[a.id]) })),
   };
   const active = sessions.filter(s => !s.parent).map(s => ({ agent: s.account, provider: s.provider, cwd: s.cwd, last: s.lastActivity }));
   const text = JSON.stringify([crew, active]);
@@ -45,7 +50,7 @@ function crewMap(config, overview, sessions) {
     leader: leaderId(config),
     agents: config.accounts.map(a => ({
       id: a.id, name: a.name, provider: a.provider, color: a.color, mascot: a.mascot,
-      strengths: PROVIDERS[a.provider].strengths, status: statusOf(overview[a.id]),
+      strengths: PROVIDERS[a.provider].strengths, ...standing(overview[a.id]), status: statusOf(overview[a.id]),
     })),
     sessions: sessions.map(s => ({
       id: s.id, agent: s.account, parent: s.parent, working: s.working, lastActivity: s.lastActivity, cwd: s.cwd,
@@ -58,4 +63,4 @@ function crewMap(config, overview, sessions) {
   };
 }
 
-module.exports = { publish, eventsSize, crewMap };
+module.exports = { publish, eventsSize, crewMap, effectiveTier, eligible };

@@ -9,6 +9,7 @@ const { signedIn } = require('../hub/cli');
 const { createUsage } = require('./usage');
 const { connectAgents } = require('./agents');
 const crew = require('./crew');
+const { createDetection } = require('./detect');
 
 const LIVE_INTERVAL_MS = 4000;
 const MICA = process.platform === 'win32' && Number(os.release().split('.')[2]) >= 22000;
@@ -22,6 +23,7 @@ if (!app.requestSingleInstanceLock()) app.exit(0);
 let win;
 let store;
 let usage;
+let detection;
 
 const usageAccounts = () => store.get().accounts.map(a => ({ ...a, realDataDir: resolveDataDir(a.dataDir) }));
 
@@ -70,7 +72,12 @@ async function overview() {
     const used = day && (day.perAccount[a.id] || { total: 0, activeMs: 0 });
     const working = sessions.some(s => s.account === a.id && s.working);
     const lastOpened = running ? Date.now() : Math.max(a.lastOpened || 0, lastActivityAt(a.dataDir), day ? day.lastActivity[a.id] || 0 : 0);
-    return [a.id, { running, working, lastOpened, signedIn: signedIn(a), tokens: used?.total, activeMs: used?.activeMs }];
+    const detected = detection.tierOf(a);
+    return [a.id, {
+      running, working, lastOpened, signedIn: signedIn(a), tokens: used?.total, activeMs: used?.activeMs,
+      plan: detection.planOf(a), tier: crew.effectiveTier(a, detected), eligible: crew.eligible(a, detected),
+      answered: detected === 'unknown' && Boolean(a.planAnswer), detecting: detection.detecting(a.id), checkedAt: detection.checkedAt(a),
+    }];
   }));
 }
 
@@ -80,10 +87,11 @@ function startLiveUpdates() {
   let lastStatus = '';
   const tick = async () => {
     const accounts = usageAccounts();
+    detection.watchSignIn(accounts);
     const changed = await usage.refresh(accounts);
     const view = await overview();
     if (store.get().crew.connected) crew.publish(store.get(), view, usage.sessions(accounts));
-    const status = `${Object.values(view).map(o => `${o.running}${o.working}`).join()}|${crew.eventsSize()}`;
+    const status = `${Object.values(view).map(o => `${o.running}${o.working}${o.tier}${o.detecting}`).join()}|${crew.eventsSize()}`;
     if ((changed || status !== lastStatus) && win && !win.isDestroyed()) win.webContents.send('live');
     lastStatus = status;
     setTimeout(tick, LIVE_INTERVAL_MS);
@@ -102,6 +110,9 @@ function registerIpc() {
   const accountOf = id => store.get().accounts.find(a => a.id === id);
   ipcMain.handle('accounts:targets', (_e, id) => availableTargets(accountOf(id), store.get().accounts));
   ipcMain.handle('accounts:blank', (_e, provider, ownProfile) => blankAccount(provider, store.get().accounts, ownProfile));
+  ipcMain.handle('accounts:update', (_e, id, patch) => store.updateAccount(id, patch));
+  ipcMain.handle('accounts:detect', async id => { await detection.refreshOne(id); return overview(); });
+  ipcMain.handle('accounts:models', (_e, id) => detection.models(id));
   ipcMain.handle('accounts:installs', installs);
   ipcMain.handle('accounts:signIn', (_e, id, part) => signIn(accountOf(id), part, store.get().accounts));
   ipcMain.handle('accounts:status', (_e, id) => {
@@ -139,6 +150,7 @@ app.whenReady().then(async () => {
   store = createStore(path.join(app.getPath('userData'), 'config.json'));
   await store.load();
   usage = createUsage(path.join(app.getPath('userData'), 'usage-cache.json'));
+  detection = createDetection({ store, version: app.getVersion(), onChange: () => { if (win && !win.isDestroyed()) win.webContents.send('live'); } });
   nativeTheme.themeSource = store.get().theme || 'system';
   nativeTheme.on('updated', applyTheme);
   // Re-registering keeps the hub's path right after Ultron moves or updates.
@@ -147,6 +159,7 @@ app.whenReady().then(async () => {
   }
   registerIpc();
   createWindow();
+  win.once('ready-to-show', detection.start);
   startLiveUpdates();
 });
 

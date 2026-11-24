@@ -3,6 +3,7 @@
 A small Windows launcher for Claude and ChatGPT desktop accounts, with a local usage dashboard.
 
 - **Accounts:** one card per account with a pixel mascot, live running state, last opened time, and tokens and active time for the last 24 hours. Click a card or press `1`–`9` to open it; the arrow next to **Open** chooses how (desktop app, CLI, VS Code or browser) and remembers the choice.
+- **Plans:** each signed-in account shows its plan (Pro, Plus, Free…) as a badge, read from that account's own CLI without a model call and refreshed every six hours. If the plan can't be detected the badge asks you. Free accounts are left out of the crew.
 - **Usage:** tokens, token mix, top model, active time, sessions, tokens over time, a Week / Month / Year activity heatmap, models, accounts and projects. Filter by account and by 24H, 7D, 30D, 90D or All.
 - **Crew:** a live flowchart of you, the leader, every agent, their sessions and subagents, who is working, and who is messaging whom. **Connect agents** gives Claude Code and Codex the Ultron Hub (shared memory and messages) and the `kiss` and `repo-structure` skills; **Disconnect** removes them.
 - **Settings:** name, theme, minimize after opening, shared memory folder.
@@ -41,7 +42,7 @@ npm run package        # build dist/Ultron-Setup-<version>.exe
 
 | Path | Contents |
 | --- | --- |
-| `src/main/` | App lifecycle, IPC, config, profile detection, "Open with" targets |
+| `src/main/` | App lifecycle, IPC, config, profile detection, "Open with" targets, plan detection scheduler |
 | `src/main/usage/` | Incremental transcript scanning, parsing, attribution and aggregation |
 | `src/hub/` | Ultron Hub MCP server, the shared CLI table (`cli.js`) and the skills shipped to every agent |
 | `src/renderer/` | Vanilla ES-module UI: `lib/` shared helpers, `pages/` one module per page |

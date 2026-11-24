@@ -9,6 +9,7 @@ import { launch } from './accounts.js';
 const LINK_MS = 10 * 60 * 1000;
 const STATUS = { working: 'Working', open: 'Open', idle: 'Idle' };
 const LEGEND = [['dot working', 'Working'], ['dot open', 'Open'], ['dot idle', 'Idle'], ['line message', 'Message'], ['line memory', 'Memory']];
+const INELIGIBLE = { free: 'Needs a paid plan', unknown: 'Plan unknown' };
 const OTHER = { id: 'other', name: 'VS Code & CLI', provider: 'claude', color: 7, mascot: {}, strengths: [] };
 
 let root;
@@ -33,10 +34,11 @@ function agentNode(a, parent) {
     + (a.strengths.length ? text(66, 60, a.strengths.join(' · '), 'n-sub') : '')
     + (leader ? '<g class="tag" transform="translate(138 -9)"><rect width="54" height="18" rx="9"/><text x="27" y="12.5">Leader</text></g>' : '');
   const clickable = a.id !== OTHER.id;
+  const idle = a.eligible === false;
   return {
-    id: a.id, parent, w: 200, h: 70, cls: `agent ${a.status}`, live: a.status === 'working',
+    id: a.id, parent, w: 200, h: 70, cls: `agent ${a.status}${idle ? ' ineligible' : ''}`, live: a.status === 'working',
     attrs: `style="--account:${colorHex(a.color)}" ${clickable ? `data-node="agent" data-id="${a.id}"` : ''}`
-      + ` data-tip="${tipRows(a.name, [['Status', STATUS[a.status]], ...(a.strengths.length ? [['Good at', a.strengths.join(', ')]] : []), ...(clickable ? [['Click', 'Open']] : [])])}"`,
+      + ` data-tip="${tipRows(a.name, [['Status', STATUS[a.status]], ...(idle ? [['Not in crew', INELIGIBLE[a.tier] || INELIGIBLE.unknown]] : []), ...(a.strengths.length ? [['Good at', a.strengths.join(', ')]] : []), ...(clickable ? [['Click', 'Open']] : [])])}"`,
     body,
   };
 }
