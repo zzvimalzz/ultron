@@ -69,6 +69,8 @@ export function openModal(html) {
 
 export const modalOpen = () => !$('#modal').hidden;
 
+export const errorText = err => err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+
 // Re-rendered markup restarts CSS animations; a delay tied to the clock keeps each loop continuous.
 export const phase = (offset = 0) => `--phase:-${Math.round(performance.now() + offset * 700)}ms`;
 

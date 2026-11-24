@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('ultron', {
   downloadUrl: invoke('accounts:downloadUrl'),
   open: invoke('accounts:open'),
   usage: invoke('usage:query'),
+  crewMap: invoke('crew:map'),
+  connectAgents: invoke('crew:connect'),
   pickFolder: invoke('dialog:pickFolder'),
   info: invoke('app:info'),
   openPath: invoke('app:openPath'),

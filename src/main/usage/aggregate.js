@@ -172,4 +172,4 @@ function aggregate(records, ctx, accounts, { account = 'all', range = '30d' } = 
   };
 }
 
-module.exports = { aggregate, prettyModel };
+module.exports = { aggregate, prettyModel, projectName };

@@ -27,6 +27,8 @@ export function render() {
           `<button class="btn" data-edit="${a.id}">${ICONS.edit}Edit</button>`)).join('')}
       </div>
       <div class="card">
+        ${row('Shared memory folder', `<div class="input-row"><input class="input" id="sMemory" style="width:260px" readonly value="${esc(cfg.crew.memoryDir)}" placeholder="Default (.ultron\\memory)">`
+          + `${cfg.crew.memoryDir ? '<button class="btn ghost" data-memory="reset">Reset</button>' : ''}<button class="btn" data-memory="pick">${ICONS.folder}Browse</button></div>`)}
         ${row('Ultron data', `<button class="btn" data-open-data>${ICONS.folder}Open folder</button>`)}
       </div>
       <div class="card about">
@@ -48,4 +50,10 @@ export function mount(el) {
   on(root, 'click', '[data-toggle-minimize]', async () => { await saveConfig({ closeOnLaunch: !state.config.closeOnLaunch }); render(); });
   on(root, 'click', '[data-edit]', btn => openEditor(btn.dataset.edit));
   on(root, 'click', '[data-open-data]', () => api.openPath(info.userData));
+  on(root, 'click', '[data-memory]', async btn => {
+    const memoryDir = btn.dataset.memory === 'pick' ? await api.pickFolder() : '';
+    if (memoryDir === null) return;
+    await saveConfig({ crew: { ...state.config.crew, memoryDir } });
+    render();
+  });
 }

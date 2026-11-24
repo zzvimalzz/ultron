@@ -4,7 +4,7 @@ const path = require('path');
 const { LOCAL, ROAMING, findShortcuts, resolveDataDir } = require('./profiles');
 const { PROVIDERS, isInstalled } = require('./targets');
 
-const VERSION = 2;
+const VERSION = 3;
 
 function defaultClaudeDataDir() {
   const base = path.join(LOCAL, 'Claude-Data');
@@ -71,6 +71,7 @@ function migrate(config) {
     delete a.target;
     delete a.pathHints;
   }
+  config.crew ||= { connected: false, leader: null, memoryDir: '' };
   if (!config.accounts.some(a => a.provider === 'chatgpt') && isInstalled('chatgpt')) {
     config.accounts.push(account('chatgpt', 0, { dataDir: chatgptDataDir() }));
   }

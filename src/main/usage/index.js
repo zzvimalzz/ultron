@@ -2,8 +2,11 @@
 const os = require('os');
 const path = require('path');
 const { createScanner } = require('./scan');
-const { buildContext } = require('./attribution');
+const { buildContext, attribute } = require('./attribution');
 const { aggregate } = require('./aggregate');
+
+const WORKING_MS = 60 * 1000;
+const ACTIVE_MS = 15 * 60 * 1000;
 
 const HOMES = {
   claude: { home: path.join(os.homedir(), '.claude'), transcripts: 'projects' },
@@ -38,7 +41,24 @@ function createUsage(cacheFile) {
     return aggregate(scanner.records(), ctx, accounts, options);
   }
 
-  return { refresh, query, ready: () => Boolean(ctx) };
+  // Sessions (and Claude subagents) active in the last ACTIVE_MS, each with its owning account.
+  function sessions(accounts) {
+    if (!ctx) return [];
+    const now = Date.now();
+    return Object.entries(scanner.records()).flatMap(([file, rec]) => {
+      const last = rec.blocks[rec.blocks.length - 1];
+      const lastActivity = last ? last[0] + last[1] : 0;
+      if (now - lastActivity > ACTIVE_MS) return [];
+      const parts = file.split(path.sep);
+      const sub = parts.lastIndexOf('subagents');
+      return [{
+        id: path.basename(file).replace(/\.jsonl(\.zst)?$/, ''), parent: sub > 0 ? parts[sub - 1] : null, file,
+        provider: rec.provider, account: attribute(file, rec, ctx, accounts), cwd: rec.cwd, lastActivity, working: now - lastActivity < WORKING_MS,
+      }];
+    });
+  }
+
+  return { refresh, query, sessions, ready: () => Boolean(ctx) };
 }
 
 module.exports = { createUsage };

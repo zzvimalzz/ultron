@@ -4,7 +4,8 @@ A small Windows launcher for Claude and ChatGPT desktop accounts, with a local u
 
 - **Accounts:** one card per account with a pixel mascot, live running state, last opened time, and tokens and active time for the last 24 hours. Click a card or press `1`–`9` to open it; the arrow next to **Open** chooses how (desktop app, CLI, VS Code or browser) and remembers the choice.
 - **Usage:** tokens, token mix, top model, active time, sessions, tokens over time, a Week / Month / Year activity heatmap, models, accounts and projects. Filter by account and by 24H, 7D, 30D, 90D or All.
-- **Settings:** name, theme, minimize after opening.
+- **Crew:** a live flowchart of you, the leader, every agent, their sessions and subagents, who is working, and who is messaging whom. **Connect agents** gives Claude Code and Codex the Ultron Hub (shared memory and messages) and the `kiss` and `repo-structure` skills; **Disconnect** removes them.
+- **Settings:** name, theme, minimize after opening, shared memory folder.
 
 Usage covers Claude Code and Codex sessions stored on this PC. Chat conversations aren't stored locally, so they aren't counted.
 
@@ -42,8 +43,21 @@ npm run package        # build dist/Ultron-Setup-<version>.exe
 | --- | --- |
 | `src/main/` | App lifecycle, IPC, config, profile detection, "Open with" targets |
 | `src/main/usage/` | Incremental transcript scanning, parsing, attribution and aggregation |
+| `src/hub/` | Ultron Hub MCP server and the skills shipped to every agent |
 | `src/renderer/` | Vanilla ES-module UI: `lib/` shared helpers, `pages/` one module per page |
 | `test/` | `node:test` suites with synthetic fixtures |
 | `tools/` | Icon generator, personal-details check, screenshot driver |
 
-Config and the usage cache live in `%APPDATA%\Ultron`.
+Config and the usage cache live in `%APPDATA%\Ultron`. The hub keeps its roster, messages and default memory folder in `.ultron` in your user folder.
+
+### Ultron Hub
+
+Connecting registers `ultron-hub` in `~/.claude.json` and `~/.codex/config.toml` (and in any account's own CLI folder) and copies the skills into each agent's `skills` folder. Agents start the server through Ultron's executable, so Node isn't required. Its tools:
+
+| Tool | Does |
+| --- | --- |
+| `crew` | Lists the agents, the leader, what each is good at and who is working |
+| `recall` / `remember` | Search and save Markdown notes in the shared memory folder |
+| `send_message` / `check_inbox` | Message an agent by name, `leader` or `everyone`, and read replies |
+
+Claude is set up for code and SVG, and ChatGPT for code, images and GIFs. The hub tells every agent to send work to whichever one fits.

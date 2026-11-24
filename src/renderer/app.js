@@ -4,11 +4,12 @@ import { installTooltips, modalOpen, phase } from './lib/ui.js';
 import { api, state } from './lib/state.js';
 import * as accounts from './pages/accounts.js';
 import * as usage from './pages/usage.js';
+import * as crew from './pages/crew.js';
 import * as settings from './pages/settings.js';
 import { setEditorListener } from './pages/editor.js';
 
-const PAGES = { accounts, usage, settings };
-const SHORTCUTS = { 1: 'accounts', 2: 'usage', ',': 'settings' };
+const PAGES = { accounts, usage, crew, settings };
+const SHORTCUTS = { 1: 'accounts', 2: 'usage', 3: 'crew', ',': 'settings' };
 let current = 'accounts';
 
 function applyTheme() {
@@ -24,6 +25,7 @@ function show(page) {
   $('#scroller').scrollTop = 0;
   if (page === 'usage' && !state.usageData) usage.load();
   else if (page === 'settings') settings.load();
+  else if (page === 'crew') crew.load();
   else PAGES[page].render();
 }
 
@@ -44,6 +46,7 @@ async function refreshLive() {
   renderSidebar();
   if (current === 'accounts' && !modalOpen()) accounts.render();
   if (state.usageData) await usage.load();
+  if (current === 'crew' && !modalOpen()) await crew.load();
 }
 
 function onKey(e) {

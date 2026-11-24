@@ -7,8 +7,8 @@ const { shell } = require('electron');
 const { LOCAL, findPackage } = require('./profiles');
 
 const PROVIDERS = {
-  claude: { web: 'https://claude.ai', download: 'https://claude.ai/download', homeEnv: 'CLAUDE_CONFIG_DIR', defaultTarget: 'claude-desktop' },
-  chatgpt: { web: 'https://chatgpt.com', download: 'https://chatgpt.com/download', homeEnv: 'CODEX_HOME', defaultTarget: 'chatgpt-desktop' },
+  claude: { web: 'https://claude.ai', download: 'https://claude.ai/download', homeEnv: 'CLAUDE_CONFIG_DIR', defaultTarget: 'claude-desktop', strengths: ['Code', 'SVG'] },
+  chatgpt: { web: 'https://chatgpt.com', download: 'https://chatgpt.com/download', homeEnv: 'CODEX_HOME', defaultTarget: 'chatgpt-desktop', strengths: ['Code', 'Images', 'GIFs'] },
 };
 
 // Microsoft Store build first, then the standalone installer's location.

@@ -1,7 +1,7 @@
 import { $, esc, on } from '../lib/dom.js';
 import * as fmt from '../lib/format.js';
 import { colorHex, mascotSVG } from '../lib/mascots.js';
-import { ICONS, phase, toast } from '../lib/ui.js';
+import { ICONS, errorText, phase, toast } from '../lib/ui.js';
 import { api, state, accountById } from '../lib/state.js';
 import { openEditor } from './editor.js';
 
@@ -75,7 +75,7 @@ export async function launch(id, targetId) {
     const label = (state.targets[account.provider] || []).find(t => t.id === used)?.label || '';
     toast(`Opening ${account.name}${label ? ` in ${label}` : ''}…`, { icon: mascotSVG(account, 22) });
   } catch (err) {
-    toast(err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''), { kind: 'error' });
+    toast(errorText(err), { kind: 'error' });
   }
   render();
 }
