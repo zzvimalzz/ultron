@@ -65,10 +65,12 @@ test('plan names map to tiers, and anything unrecognised is unknown', () => {
 });
 
 test('a detected plan wins over the user\'s answer, which only fills in while detection cannot tell', () => {
-  const answered = { planAnswer: 'paid' };
+  const answered = { provider: 'claude', planAnswer: 'pro' };
   assert.strictEqual(effectiveTier(answered, 'free'), 'free');
   assert.strictEqual(effectiveTier(answered, 'unknown'), 'paid');
-  assert.strictEqual(effectiveTier({ planAnswer: null }, 'unknown'), 'unknown');
+  assert.strictEqual(effectiveTier({ provider: 'claude', planAnswer: 'paid' }, 'unknown'), 'paid');
+  assert.strictEqual(effectiveTier({ provider: 'chatgpt', planAnswer: 'business' }, 'unknown'), 'team');
+  assert.strictEqual(effectiveTier({ provider: 'claude', planAnswer: null }, 'unknown'), 'unknown');
   assert.strictEqual(eligible(answered, 'unknown'), true);
   assert.strictEqual(eligible({}, 'team'), true);
   assert.strictEqual(eligible({}, 'free'), false);

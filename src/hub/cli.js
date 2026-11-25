@@ -74,8 +74,8 @@ const DETECT_TIMEOUT_MS = 25000;
 
 // First hit wins; anything unmatched is 'unknown'.
 const TIERS = {
-  claude: [[/free/i, 'free'], [/team|enterprise/i, 'team'], [/pro|max/i, 'paid']],
-  chatgpt: [[/^free$/i, 'free'], [/team|business|enterprise|edu/i, 'team'], [/plus|pro|go/i, 'paid']],
+  claude: [[/free/i, 'free'], [/team|enterprise/i, 'team'], [/pro|max|paid/i, 'paid']],
+  chatgpt: [[/^free$/i, 'free'], [/team|business|enterprise|edu/i, 'team'], [/plus|pro|go|paid/i, 'paid']],
 };
 
 const tierOf = (provider, plan) => (plan && TIERS[provider].find(([pattern]) => pattern.test(plan))?.[1]) || 'unknown';

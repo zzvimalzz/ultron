@@ -1,7 +1,7 @@
 import { $, esc, on } from '../lib/dom.js';
 import { ACCESSORIES, COLORS, EYES, colorHex, mascotSVG } from '../lib/mascots.js';
 import { ICONS, button, closeDrawer, onSelect, openDrawer, openModal, select, skeleton, tip, toast, updateDrawer } from '../lib/ui.js';
-import { planBadge, planChoices } from '../lib/plan.js';
+import { detectNote, planBadge, planChoices } from '../lib/plan.js';
 import { ago } from '../lib/format.js';
 import { api, state, accountById, loadModels, loadTargets, saveConfig, toastError } from '../lib/state.js';
 
@@ -44,10 +44,12 @@ function planSection(account) {
   const live = state.overview[account.id] || {};
   if (live.signedIn === false) return '';
   const asking = live.tier === 'unknown' || live.answered;
+  const note = detectNote(live);
   return `<div class="dsec"><span class="cap">Plan</span><div class="plan-row">${planBadge(live)}`
     + `<span class="when">${live.checkedAt ? `Checked ${ago(live.checkedAt)}` : ''}</span>`
     + `${button('Check again', { kind: 'sm', attrs: `data-detect ${live.detecting ? 'disabled' : ''}` })}</div>`
-    + `${asking ? `<div class="picks plans">${planChoices.map(([tier, label]) => `<button class="pick ${account.planAnswer === tier ? 'on' : ''}" data-plan-answer="${tier}">${label}</button>`).join('')}</div>` : ''}</div>`;
+    + `${note ? `<div class="plan-note">${esc(note)}</div>` : ''}`
+    + `${asking ? `<div class="picks plans">${planChoices(account.provider).map(([plan, label]) => `<button class="pick ${account.planAnswer === plan ? 'on' : ''}" data-plan-answer="${plan}">${label}</button>`).join('')}</div>` : ''}</div>`;
 }
 
 const section = (title, html) => `<div class="dsec"><span class="cap">${title}</span>${html}</div>`;

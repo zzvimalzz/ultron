@@ -81,10 +81,11 @@ async function overview() {
     const working = sessions.some(s => s.account === a.id && s.working);
     const lastOpened = running ? Date.now() : Math.max(a.lastOpened || 0, lastActivityAt(a.dataDir), day ? day.lastActivity[a.id] || 0 : 0);
     const detected = detection.tierOf(a);
+    const answered = detected === 'unknown' && Boolean(a.planAnswer);
     return [a.id, {
       running, working, lastOpened, signedIn: signedIn(a), launchOnly: isLaunchOnly(a.provider), tokens: used?.total, activeMs: used?.activeMs,
-      plan: detection.planOf(a), tier: crew.effectiveTier(a, detected), eligible: crew.eligible(a, detected),
-      answered: detected === 'unknown' && Boolean(a.planAnswer), detecting: detection.detecting(a.id), checkedAt: detection.checkedAt(a),
+      plan: answered ? a.planAnswer : detection.planOf(a), tier: crew.effectiveTier(a, detected), eligible: crew.eligible(a, detected),
+      answered, detectState: detection.stateOf(a.id), detecting: detection.detecting(a.id), checkedAt: detection.checkedAt(a),
     }];
   }));
 }
@@ -119,6 +120,7 @@ function registerIpc() {
   ipcMain.handle('accounts:targets', (_e, id) => availableTargets(accountOf(id), store.get().accounts));
   ipcMain.handle('accounts:blank', (_e, provider, ownProfile) => blankAccount(provider, store.get().accounts, ownProfile));
   ipcMain.handle('accounts:update', (_e, id, patch) => store.updateAccount(id, patch));
+  ipcMain.handle('accounts:reorder', (_e, ids) => store.reorder(ids));
   ipcMain.handle('accounts:detect', async id => { await detection.refreshOne(id); return overview(); });
   ipcMain.handle('accounts:models', (_e, id) => detection.models(id));
   ipcMain.handle('accounts:installs', installs);

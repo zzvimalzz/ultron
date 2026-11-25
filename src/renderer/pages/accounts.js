@@ -1,4 +1,4 @@
-import { $, esc, on } from '../lib/dom.js';
+import { $, $$, esc, on } from '../lib/dom.js';
 import * as fmt from '../lib/format.js';
 import { colorHex, mascotSVG } from '../lib/mascots.js';
 import { ICONS, badge, button, flip, phase, tip, toast } from '../lib/ui.js';
@@ -9,6 +9,7 @@ import { openEditor } from './editor.js';
 let root;
 let menuFor = null;
 let askFor = null;
+let dragId = null;
 
 const targetsOf = account => state.targets[account.id] || [];
 
@@ -21,7 +22,7 @@ function openWithMenu(account) {
 function planAsk(account, live) {
   const badge = planBadge(live);
   if (!badge) return '';
-  const menu = askFor === account.id ? `<div class="menu" role="menu">${planChoices.map(([tier, label]) => `<button role="menuitem" data-plan-pick="${tier}">${label}</button>`).join('')}</div>` : '';
+  const menu = askFor === account.id ? `<div class="menu" role="menu">${planChoices(account.provider).map(([plan, label]) => `<button role="menuitem" data-plan-pick="${plan}">${label}</button>`).join('')}</div>` : '';
   return `<span class="plan-wrap">${badge}${menu}</span>`;
 }
 
@@ -41,7 +42,7 @@ function card(account, index) {
   const counted = live.tokens !== undefined;
   const status = live.working ? ['busy', 'Working'] : live.running ? ['on', 'Running'] : ['', 'Not running'];
   return `
-    <div class="acct ${live.working ? 'working' : ''}" role="button" tabindex="0" data-flip="${account.id}" data-account="${account.id}" aria-label="Open ${esc(account.name)}" style="${phase(index)}">
+    <div class="acct ${live.working ? 'working' : ''}" role="button" tabindex="0" draggable="true" data-flip="${account.id}" data-account="${account.id}" aria-label="Open ${esc(account.name)}" style="${phase(index)}">
       <div class="acct-hero" style="--account:${hex}">
         <span class="status ${status[0]}"><i></i>${status[1]}</span>
         <button class="icon-btn acct-edit" data-edit="${account.id}" aria-label="Customize ${esc(account.name)}">${ICONS.edit}</button>
@@ -84,7 +85,18 @@ function draw() {
   if (menu && menu.getBoundingClientRect().bottom > root.closest('.scroller').getBoundingClientRect().bottom) menu.classList.add('up');
 }
 
-export const render = () => flip(root, draw);
+// A redraw mid-drag would replace the card being dragged.
+export const render = () => { if (!dragId) flip(root, draw); };
+
+const clearDrop = () => $$('.drop-before, .drop-after', root).forEach(el => el.classList.remove('drop-before', 'drop-after'));
+const dropSide = (card, e) => { const box = card.getBoundingClientRect(); return e.clientX < box.left + box.width / 2 ? 'before' : 'after'; };
+
+async function moveAccount(id, targetId, side) {
+  const ids = state.config.accounts.map(a => a.id).filter(x => x !== id);
+  ids.splice(ids.indexOf(targetId) + (side === 'after' ? 1 : 0), 0, id);
+  state.config = await api.reorderAccounts(ids);
+  document.dispatchEvent(new Event('accountsreordered'));
+}
 
 export async function launch(id, targetId) {
   const account = accountById(id);
@@ -110,6 +122,28 @@ async function toggleMenu(id) {
 
 export function mount(el) {
   root = el;
+  on(root, 'dragstart', '[data-account]', (card, e) => {
+    dragId = card.dataset.account;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', dragId);
+    card.classList.add('dragging');
+  });
+  on(root, 'dragover', '[data-account]', (card, e) => {
+    if (!dragId || card.dataset.account === dragId) return;
+    e.preventDefault();
+    clearDrop();
+    card.classList.add(`drop-${dropSide(card, e)}`);
+  });
+  on(root, 'drop', '[data-account]', async (card, e) => {
+    if (!dragId) return;
+    e.preventDefault();
+    const id = dragId;
+    const side = dropSide(card, e);
+    dragId = null;
+    if (card.dataset.account !== id) await moveAccount(id, card.dataset.account, side);
+    flip(root, draw);
+  });
+  on(root, 'dragend', '[data-account]', () => { dragId = null; clearDrop(); flip(root, draw); });
   on(root, 'click', '[data-add]', () => openEditor(null));
   on(root, 'click', '[data-edit]', btn => openEditor(btn.dataset.edit));
   on(root, 'click', '[data-menu]', btn => toggleMenu(btn.dataset.menu));

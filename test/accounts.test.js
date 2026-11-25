@@ -42,6 +42,15 @@ test('a new account gets its own CLI home under the hub folder, created when the
   assert.strictEqual(fs.existsSync(fresh.cliHome), true);
 });
 
+test('reorder follows the given ids, ignores unknown ones and keeps accounts it was not told about', async () => {
+  const file = path.join(TEMP, 'order.json');
+  const store = createStore(file);
+  await store.load();
+  store.update({ accounts: ['a', 'b', 'c'].map(id => ({ id, provider: 'claude', cliHome: '' })) });
+  assert.deepStrictEqual(store.reorder(['c', 'x', 'a']).accounts.map(a => a.id), ['c', 'a', 'b']);
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(file, 'utf8')).accounts.map(a => a.id), ['c', 'a', 'b']);
+});
+
 test('a second ChatGPT account opens in the CLI because the desktop app holds one account', async () => {
   const first = blankAccount('chatgpt', []);
   const second = blankAccount('chatgpt', [first]);

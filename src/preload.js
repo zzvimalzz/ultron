@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('ultron', {
   targets: invoke('accounts:targets'),
   blankAccount: invoke('accounts:blank'),
   updateAccount: invoke('accounts:update'),
+  reorderAccounts: invoke('accounts:reorder'),
   detect: invoke('accounts:detect'),
   models: invoke('accounts:models'),
   installs: invoke('accounts:installs'),

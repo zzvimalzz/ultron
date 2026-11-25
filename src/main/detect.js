@@ -76,6 +76,7 @@ function createDetection({ store, version, onChange, onReset }) {
     planOf: account => results.get(account.id)?.plan || account.plan?.label || null,
     checkedAt: account => results.get(account.id)?.checkedAt || account.plan?.checkedAt || 0,
     detecting: id => inflight.has(id),
+    stateOf: id => results.get(id)?.state || '',
     models: async id => {
       const found = results.get(id) || await refreshOne(id);
       return { models: found?.models || [], checkedAt: found?.checkedAt || 0 };

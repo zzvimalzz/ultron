@@ -2,14 +2,14 @@
 const fs = require('fs');
 const path = require('path');
 const { projectName, prettyModel } = require('./usage/aggregate');
-const { homeOf } = require('../hub/cli');
+const { homeOf, tierOf } = require('../hub/cli');
 const { isLaunchOnly } = require('./targets');
 const { MEMORY_DIR, CREW_FILE, SESSIONS_FILE, EVENTS_FILE, readJson, writeJson, recentEvents } = require('../hub/files');
 
 const FEED_MS = 24 * 3600 * 1000;
 
 // A detected plan wins; the user's answer only fills in while detection can't tell.
-const effectiveTier = (account, detected = 'unknown') => (detected !== 'unknown' ? detected : account.planAnswer || 'unknown');
+const effectiveTier = (account, detected = 'unknown') => (detected !== 'unknown' ? detected : tierOf(account.provider, account.planAnswer));
 // Only paid and team plans can run a model for the memory curator.
 const eligible = (account, detected) => ['paid', 'team'].includes(effectiveTier(account, detected));
 

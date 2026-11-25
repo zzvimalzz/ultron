@@ -103,6 +103,7 @@ async function boot() {
   api.onUpdateReady(showUpdate);
   if (state.info.updateReady) showUpdate();
   document.addEventListener('opensetup', setup.open);
+  document.addEventListener('accountsreordered', renderSidebar);
   if (!state.config.setupDone) setup.open();
   Promise.all(state.config.accounts.filter(a => a.model).map(a => loadModels(a.id))).then(() => accounts.render());
   // Relative times ("5m ago") drift between live events, so the cards re-render each minute.

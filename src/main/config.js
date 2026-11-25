@@ -130,6 +130,14 @@ function createStore(file) {
       save();
       return config;
     },
+    // Unknown ids are ignored and accounts missing from `ids` keep their place at the end.
+    reorder(ids) {
+      const byId = new Map(config.accounts.map(a => [a.id, a]));
+      const ordered = [...new Set(ids)].filter(id => byId.has(id)).map(id => byId.get(id));
+      config.accounts = [...ordered, ...config.accounts.filter(a => !ordered.includes(a))];
+      save();
+      return config;
+    },
     updateAccount(id, patch) {
       config.accounts = config.accounts.map(a => (a.id === id ? { ...a, ...patch } : a));
       save();
