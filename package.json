@@ -4,6 +4,7 @@
   "version": "2.4.1",
   "description": "Launcher, live activity map and usage dashboard for Claude and ChatGPT desktop accounts",
   "author": "Ultron",
+  "license": "MIT",
   "main": "src/main/index.js",
   "private": true,
   "scripts": {
