@@ -24,6 +24,12 @@ export function ago(t) {
   return date(t, { day: 'numeric', month: 'short' });
 }
 
+// Compact age for live activity: 8s, 4m, 2h.
+export function since(t) {
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h`;
+}
+
 export const date = (t, options) => new Date(t).toLocaleDateString(undefined, options);
 export const time = (t, options) => new Date(t).toLocaleTimeString(undefined, options);
 export const percent = share => `${Math.round(share * 100)}%`;

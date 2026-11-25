@@ -269,4 +269,10 @@ export const ICONS = {
   chevronLeft: '<svg viewBox="0 0 16 16"><path d="M10 4L6 8l4 4"/></svg>',
   chevronRight: '<svg viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg>',
   terminal: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 7l2 1.5L5 10M8.5 10h2.5"/></svg>',
+  file: '<svg viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/></svg>',
+  search: '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.2"/><path d="M10.2 10.2l3.3 3.3"/></svg>',
+  globe: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8"/><path d="M2.2 8h11.6M8 2.2c1.8 1.7 2.6 3.6 2.6 5.8S9.8 12.1 8 13.8C6.2 12.1 5.4 10.2 5.4 8S6.2 3.9 8 2.2z"/></svg>',
+  branch: '<svg viewBox="0 0 16 16"><circle cx="4.5" cy="3.5" r="1.6"/><circle cx="4.5" cy="12.5" r="1.6"/><circle cx="11.5" cy="6" r="1.6"/><path d="M4.5 5.1v5.8M11.5 7.6c0 2.4-3.5 2-6.4 3.6"/></svg>',
+  list: '<svg viewBox="0 0 16 16"><path d="M6.5 4.5H13M6.5 8H13M6.5 11.5H13M3 4.5h.1M3 8h.1M3 11.5h.1"/></svg>',
+  tool: '<svg viewBox="0 0 16 16"><path d="M10.4 2.6a3 3 0 0 0-3.7 3.9L2.8 10.4a1.3 1.3 0 0 0 1.8 1.8l3.9-3.9a3 3 0 0 0 3.9-3.7l-1.8 1.8-1.6-.4-.4-1.6z"/></svg>',
 };

@@ -36,6 +36,43 @@ test('codex: usage is the delta between cumulative totals', () => {
   assert.equal(first[1], 'gpt-6-luna');
 });
 
+test('claude: recent actions, title and turn end are read from the transcript', () => {
+  const t = Date.parse('2026-01-05T10:00:00Z');
+  const assistant = (offset, content, stop) => ({ type: 'assistant', sessionId: 's', cwd: 'x', timestamp: new Date(t + offset).toISOString(), message: { id: `m${offset}`, content, stop_reason: stop } });
+  const lines = [
+    { type: 'ai-title', aiTitle: 'Fix the parser', sessionId: 's' },
+    assistant(0, [{ type: 'tool_use', name: 'Read', input: { file_path: 'C:\\repo\\src\\parse.js' } }], 'tool_use'),
+    assistant(1000, [{ type: 'tool_use', name: 'Bash', input: { command: 'npm test\nmore', description: 'Run the tests' } }], 'tool_use'),
+  ];
+  const rec = readLines(emptyRecord(), 'claude', jsonl(lines));
+  assert.equal(rec.title, 'Fix the parser');
+  assert.equal(rec.ended, false);
+  assert.deepEqual(rec.acts.map(a => a.slice(1)), [['Read', 'C:\\repo\\src\\parse.js'], ['Bash', 'Run the tests']]);
+  readLines(rec, 'claude', jsonl([assistant(2000, [{ type: 'text', text: 'All tests pass.\nDetails follow.' }], 'end_turn')]));
+  assert.equal(rec.ended, true);
+  assert.deepEqual(rec.acts[rec.acts.length - 1].slice(1), ['', 'All tests pass.']);
+  readLines(rec, 'claude', jsonl(Array.from({ length: 8 }, (_, i) => assistant(3000 + i, [{ type: 'tool_use', name: 'Grep', input: { pattern: `p${i}` } }], 'tool_use'))));
+  assert.equal(rec.acts.length, 6);
+  assert.equal(rec.acts[5][2], 'p7');
+});
+
+test('codex: tool calls inside exec, patches and task completion become actions', () => {
+  const start = Date.parse('2026-01-05T10:00:00Z');
+  const item = (offset, payload, type = 'response_item') => ({ timestamp: new Date(start + offset).toISOString(), type, payload });
+  const lines = [
+    item(0, { type: 'task_started' }, 'event_msg'),
+    item(1000, { type: 'custom_tool_call', name: 'exec', input: 'const r = await tools.exec_command({cmd:"rg -n \\"todo\\" src"});' }),
+    item(2000, { type: 'custom_tool_call', name: 'apply_patch', input: '*** Begin Patch\n*** Update File: src/app.js\n@@' }),
+    item(3000, { type: 'function_call', name: 'shell', arguments: JSON.stringify({ command: ['npm', 'test'] }) }),
+    item(4000, { type: 'message', role: 'assistant', content: [{ type: 'output_text', text: 'Done.' }] }),
+  ];
+  const rec = readLines(emptyRecord(), 'chatgpt', jsonl(lines));
+  assert.equal(rec.ended, false);
+  assert.deepEqual(rec.acts.map(a => a.slice(1)), [['exec_command', 'rg -n "todo" src'], ['apply_patch', 'src/app.js'], ['shell', 'npm test'], ['', 'Done.']]);
+  readLines(rec, 'chatgpt', jsonl([item(5000, { type: 'task_complete' }, 'event_msg')]));
+  assert.equal(rec.ended, true);
+});
+
 test('scanner reads appended lines only and waits for a complete line', async () => {
   const dir = tmp();
   const file = path.join(dir, 'p', 's.jsonl');

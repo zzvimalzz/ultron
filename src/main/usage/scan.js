@@ -5,7 +5,7 @@ const zlib = require('zlib');
 const { emptyRecord, readLines } = require('./parsers');
 const { walkFiles } = require('./walk');
 
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 5;
 
 // Splits on the newline byte so multi-byte characters never straddle a chunk boundary. Chunks of a
 // long line are collected and joined once, not re-copied on every chunk.

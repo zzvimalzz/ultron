@@ -1,7 +1,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { projectName } = require('./usage/aggregate');
+const { projectName, prettyModel } = require('./usage/aggregate');
 const { homeOf } = require('../hub/cli');
 const { isLaunchOnly } = require('./targets');
 const { MEMORY_DIR, CREW_FILE, SESSIONS_FILE, EVENTS_FILE, readJson, writeJson, recentEvents } = require('../hub/files');
@@ -58,7 +58,7 @@ function crewMap(config, overview, sessions) {
     agents: config.accounts.map(a => ({ ...agentOf(a, overview), color: a.color, mascot: a.mascot })),
     sessions: sessions.map(s => ({
       id: s.id, agent: s.account, parent: s.parent, working: s.working, lastActivity: s.lastActivity, cwd: s.cwd,
-      label: s.parent ? subagentType(s.file) : projectName(s.cwd),
+      label: s.parent ? subagentType(s.file) : projectName(s.cwd), title: s.title, model: s.model ? prettyModel(s.model) : '', acts: s.acts,
     })),
     events: recentEvents(Date.now() - FEED_MS).slice(-60).map(e => ({
       t: e.t, type: e.type, action: e.action, title: e.title, text: e.text, to: e.to,

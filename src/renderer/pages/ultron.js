@@ -3,6 +3,7 @@ import * as fmt from '../lib/format.js';
 import { brandSVG, colorHex, mascotSVG } from '../lib/mascots.js';
 import { ICONS, button, flip, onSegment, openDrawer, options, phase, segmented, skeleton, tip, tipRows, toast } from '../lib/ui.js';
 import { flowchart } from '../lib/flowchart.js';
+import { describe } from '../lib/activity.js';
 import { api, accountById, saveConfig, state, toastError } from '../lib/state.js';
 import { openEditor } from './editor.js';
 import * as memoryView from './memory.js';
@@ -10,9 +11,10 @@ import * as memoryView from './memory.js';
 const STATUS = { ready: 'Ready', working: 'Working', waiting: 'Waiting', done: 'Done', failed: 'Failed' };
 const INELIGIBLE = { free: 'Free plan', unknown: 'Plan unknown', paid: 'Left out by you', team: 'Left out by you' };
 const MEMORY_VERBS = { context: 'read the project context', recalled: 'recalled', saved: 'saved', updated: 'updated', archived: 'archived' };
-const WINDOWS = { memory: 2400, report: 1800, blocked: 800 };
+const WINDOWS = { memory: 2400, report: 1800, blocked: 800, act: 2400 };
 const MEMORY_READS = ['context', 'recalled'];
 const RESULT_LINES = 12;
+const TRAIL = 3;
 const TIMELINE_KEY = 'ultron.timeline.collapsed';
 
 let root;
@@ -44,6 +46,15 @@ const leader = () => data.agents.find(a => a.id === data.leader);
 const folder = () => state.config.ultron?.lastFolder || '';
 const accountFor = id => accountById(id) || { name: 'Account', color: 1, mascot: {}, provider: 'claude', roles: [] };
 
+// Live mode: the sessions each account is running on its own, outside Ultron tasks. Sessions no account owns are left out.
+const liveSessions = () => data.sessions.filter(s => !s.parent && accountById(s.agent)).sort((a, b) => b.working - a.working || b.lastActivity - a.lastActivity);
+const subagentsOf = id => data.sessions.filter(s => s.parent === id && s.working);
+const actsOf = s => [...s.acts].reverse().map(a => describe(a, data.memoryDir));
+const folderName = cwd => (cwd || '').split(/[\\/]/).filter(Boolean).pop() || 'Unknown folder';
+const smallIcon = icon => icon.replace('<svg ', '<svg width="12" height="12" ');
+const memoryLink = (node, writes) => (writes ? { from: node, to: 'memory', kind: 'memory' } : { from: 'memory', to: node, kind: 'memory' });
+const drawerRows = rows => rows.map(([k, v]) => `<div class="drow"><span class="muted">${esc(k)}</span><span>${esc(v)}</span></div>`).join('');
+
 function runBlocker() {
   if (!leader()?.eligible) return 'The leader needs a paid plan';
   return state.info.git ? '' : 'Install Git to enable undo';
@@ -60,12 +71,18 @@ function statusOf(agent) {
   return last.status === 'done' ? 'done' : 'failed';
 }
 
+// Each live session's newest action, shaped like an event so its chip and glow play once.
+const liveActEvents = () => data.sessions.filter(s => s.acts.length && accountById(s.agent)).map(s => {
+  const [t, tool, detail] = lastOf(s.acts);
+  return { t, type: 'act', session: s.id, title: `${s.id}:${tool}:${detail}` };
+});
+
 // Effects (pulses, chips, glows, flashes) play once per event: the first time the page sees it.
 function activeEffects() {
   const now = Date.now();
   const active = [];
-  for (const e of view ? view.events : data.events.filter(x => x.type === 'memory')) {
-    const kind = e.type === 'memory' ? 'memory' : e.type === 'run.finished' && e.status === 'done' ? 'report' : e.type === 'guard.blocked' ? 'blocked' : null;
+  for (const e of view ? view.events : [...data.events.filter(x => x.type === 'memory'), ...liveActEvents()]) {
+    const kind = e.type === 'memory' ? 'memory' : e.type === 'act' ? 'act' : e.type === 'run.finished' && e.status === 'done' ? 'report' : e.type === 'guard.blocked' ? 'blocked' : null;
     if (!kind) continue;
     const key = eventKey(e);
     if (!shown.has(key)) shown.set(key, now);
@@ -96,6 +113,79 @@ function idleLeaderNode() {
   return agentNode({ id: 'leader', title: 'Leader', account: account.id, role: 'leader' }, 'you', []);
 }
 
+function liveAccountNode(id, sessions) {
+  const account = accountFor(id);
+  const busy = sessions.filter(s => s.working).length;
+  const status = busy ? 'working' : 'idle';
+  const sub = (busy ? 'Working' : `Idle ${fmt.since(Math.max(...sessions.map(s => s.lastActivity)))}`) + (sessions.length > 1 ? ` · ${sessions.length} sessions` : '');
+  return {
+    id: `a:${id}`, parent: 'you', w: 184, h: 60, cls: `agent ${status}`, live: Boolean(busy),
+    attrs: `style="--account:${colorHex(account.color)}" data-node="account" data-id="${esc(id)}"`,
+    body: box(184, 60) + `<g transform="translate(10 10)">${mascotSVG(account, 40)}</g>` + text(60, 25, clip(account.name, 16), 'n-name') + dot(64, 40, status) + text(73, 44, sub, 'n-sub'),
+  };
+}
+
+const actLine = a => (a.verb ? `${a.verb} ${a.target}` : `“${a.target}”`);
+
+// A new tool call floats a chip, tinted by its kind, up off the node and makes the node glow.
+function actChip(act, w) {
+  const label = clip(actLine(act), 30);
+  const width = Math.round(label.length * 6.2 + 34);
+  return `<g class="actchip" style="--cx:${w / 2}px"><rect x="${-width / 2}" y="-11" width="${width}" height="22" rx="11"/>`
+    + `<g transform="translate(${-width / 2 + 9} -6)">${smallIcon(act.icon)}</g><text x="${-width / 2 + 26}" y="4">${esc(label)}</text></g>`;
+}
+
+// The parts sessions and subagents share: kind tint, glow class, age of the effect and the chip.
+function actState(s, effects, w) {
+  const [now] = actsOf(s);
+  const ping = now && effects.find(e => e.kind === 'act' && e.session === s.id);
+  return {
+    now,
+    cls: `${now ? `k-${now.kind}` : ''} ${ping ? 'pinged' : ''}`,
+    style: `--account:${colorHex(accountFor(s.agent).color)};--age:-${ping ? ping.age : 0}ms`,
+    chip: ping ? actChip(now, w) : '',
+  };
+}
+
+function sessionNode(s, effects) {
+  const { now, cls, style, chip } = actState(s, effects, 200);
+  return {
+    id: `s:${s.id}`, parent: `a:${s.agent}`, w: 200, h: 54, cls: `session ${s.working ? 'working' : 'idle'} ${cls}`, live: s.working,
+    attrs: `style="${style}" data-node="session" data-id="${esc(s.id)}" data-tip="${tip(s.cwd || 'Unknown folder')}"`,
+    body: box(200, 54) + '<rect class="s-bar" x="0" y="12" width="3" height="30" rx="1.5"/>' + text(14, 23, clip(s.title || s.label, 27), 'n-name')
+      + (now ? `<g class="s-icon" transform="translate(14 32)">${smallIcon(now.icon)}</g>` + text(31, 42, clip(actLine(now), 26), 'n-sub') : text(14, 42, folderName(s.cwd), 'n-sub'))
+      + chip,
+  };
+}
+
+function subagentNode(s, parent, effects) {
+  const { now, cls, style, chip } = actState(s, effects, 168);
+  return {
+    id: `s:${s.id}`, parent: `s:${parent}`, w: 168, h: 32, cls: `subagent working ${cls}`, live: true,
+    attrs: `style="${style}" data-node="session" data-id="${esc(s.id)}" data-tip="${tip(now ? actLine(now) : s.label)}"`,
+    body: '<rect class="box" width="168" height="32" rx="16"/>' + dot(16, 16, 'working') + text(28, 20, clip(s.label, 16), 'n-sub')
+      + (now ? `<g class="s-icon" transform="translate(144 10)">${smallIcon(now.icon)}</g>` : '') + chip,
+  };
+}
+
+// Each account with sessions, its sessions under it, and their working subagents; memory use pulses to the session or account.
+function liveNodes(nodes, links, effects) {
+  const sessions = liveSessions();
+  for (const id of new Set(sessions.map(s => s.agent))) {
+    const mine = sessions.filter(s => s.agent === id);
+    nodes.push(liveAccountNode(id, mine));
+    for (const s of mine) {
+      nodes.push(sessionNode(s, effects));
+      for (const sub of subagentsOf(s.id)) nodes.push(subagentNode(sub, s.id, effects));
+      const [now] = actsOf(s);
+      if (s.working && now?.kind === 'memory') links.push(memoryLink(`s:${s.id}`, now.writes));
+    }
+  }
+  for (const e of effects.filter(x => x.kind === 'memory')) {
+    links.push(memoryLink(`a:${e.from}`, !MEMORY_READS.includes(e.action)));
+  }
+}
+
 function memoryNode(effects) {
   const last = data.events.filter(e => e.type === 'memory').pop();
   const chips = effects.filter(e => e.kind === 'memory');
@@ -110,21 +200,28 @@ function memoryNode(effects) {
   };
 }
 
+function youLine() {
+  const busy = view ? 0 : new Set(liveSessions().filter(s => s.working).map(s => s.agent)).size;
+  return busy ? `${busy} working` : fmt.count(state.config.accounts.length, 'account');
+}
+
 function chart() {
   const effects = activeEffects();
   const you = { id: 'you', parent: null, w: 156, h: 54, cls: 'you',
     body: `${box(156, 54)}<rect class="you-mark" x="11" y="11" width="32" height="32" rx="9"/><g transform="translate(15 18)">${brandSVG(24)}</g>`
-      + text(54, 25, clip(state.config.userName || 'You', 13), 'n-name') + text(54, 41, fmt.count(state.config.accounts.length, 'account'), 'n-sub') };
+      + text(54, 25, clip(state.config.userName || 'You', 13), 'n-name') + text(54, 41, youLine(), 'n-sub') };
   const nodes = [you, memoryNode(effects)];
   const links = [];
   if (view) {
     for (const a of view.agents) nodes.push(agentNode(a, a.parent || 'you', effects));
     for (const e of effects) {
       const agent = e.agent && agentOf(e.agent) ? e.agent : 'you';
-      if (e.kind === 'memory') links.push(MEMORY_READS.includes(e.action) ? { from: 'memory', to: agent, kind: 'memory' } : { from: agent, to: 'memory', kind: 'memory' });
+      if (e.kind === 'memory') links.push(memoryLink(agent, !MEMORY_READS.includes(e.action)));
       if (e.kind === 'report') links.push({ from: e.agent, to: agentOf(e.agent)?.parent || 'you', kind: 'report', once: true });
     }
     for (const q of view.questions.filter(x => x.answer === undefined)) links.push({ from: q.from, to: q.to === 'user' ? 'you' : q.to, kind: 'ask' });
+  } else if (liveSessions().length) {
+    liveNodes(nodes, links, effects);
   } else {
     nodes.push(idleLeaderNode());
   }
@@ -235,12 +332,35 @@ function finishedCard() {
     + `${expanded.has('files') ? `<div class="files">${files.map(f => `<button class="file-row" data-file="${esc(f.file)}"><span style="color:${colors[f.status] || 'var(--text-2)'}">${esc(f.status)}</span>${esc(f.file)}</button>`).join('')}</div>` : ''}${confirm}</div>`;
 }
 
+function actRow(a, sessionId) {
+  const words = a.verb ? `<span class="act-verb">${esc(a.verb)}</span><span class="act-target">${esc(a.target)}</span>` : `<span class="act-target">“${esc(a.target)}”</span>`;
+  return `<div class="act ${a.kind}" data-flip="${esc(`act:${sessionId}:${a.t}:${a.verb}:${a.target}`)}" data-tip="${tip(a.target || a.verb)}"><span class="act-ico">${a.icon}</span>${words}<span class="when">${fmt.since(a.t)}</span></div>`;
+}
+
+function liveCard(s) {
+  const account = accountFor(s.agent);
+  const [now, ...trail] = actsOf(s);
+  const subagents = subagentsOf(s.id);
+  return `<div class="live-card ${s.working ? 'working' : ''}" style="--account:${colorHex(account.color)}" data-session="${esc(s.id)}" data-flip="live-${esc(s.id)}">`
+    + `<div class="lc-head"><span class="mini">${mascotSVG(account, 22)}</span><div class="lc-who"><b>${esc(account.name)}</b><span>${esc(s.title || s.label)}</span></div>`
+    + `<span class="lc-state">${s.working ? '<i></i>Working' : esc(`Idle ${fmt.since(s.lastActivity)}`)}</span></div>`
+    + `<div class="lc-meta"><button class="lc-chip" data-open-folder="${esc(s.cwd || '')}" data-tip="${tip(s.cwd || 'Unknown folder')}">${ICONS.folder}<span>${esc(folderName(s.cwd))}</span></button>`
+    + `${s.model ? `<span class="lc-chip">${ICONS.model}<span>${esc(s.model)}</span></span>` : ''}</div>`
+    + `${now ? `<div class="lc-now">${actRow(now, s.id)}</div>` : ''}`
+    + `${trail.length ? `<div class="lc-trail">${trail.slice(0, TRAIL).map(a => actRow(a, s.id)).join('')}</div>` : ''}`
+    + `${subagents.length ? `<div class="lc-subs">${subagents.map(x => `<span class="lc-sub"><i></i>${esc(x.label)}</span>`).join('')}</div>` : ''}</div>`;
+}
+
 function timelineHtml() {
   const chevron = `<button class="icon-btn tl-toggle" data-collapse aria-label="${collapsed ? 'Show timeline' : 'Hide timeline'}">${collapsed ? ICONS.chevronLeft : ICONS.chevronRight}</button>`;
   if (collapsed) return chevron;
   if (!view) {
+    const sessions = liveSessions();
+    const busy = sessions.filter(s => s.working).length;
     const rows = tasks.map(t => `<button class="ev recent" data-task="${t.id}" data-flip="task-${t.id}"><span class="dot ${t.status}"></span><div class="x"><b>${esc(t.title)}</b></div><span class="when">${fmt.ago(t.created)}</span></button>`).join('');
-    return `<div class="th"><span class="t">Recent tasks</span>${chevron}</div><div class="tb">${rows || '<div class="feed-empty muted">No tasks yet</div>'}</div>`;
+    return `<div class="th"><span class="t">Live</span>${busy ? `<span class="live-count"><i></i>${busy} working</span>` : ''}${chevron}</div>`
+      + `<div class="tb">${sessions.map(liveCard).join('') || '<div class="feed-empty muted">Nobody is working right now</div>'}`
+      + `${rows ? `<div class="tb-cap cap">Recent tasks</div>${rows}` : ''}</div>`;
   }
   const { task } = view;
   const pending = view.questions.filter(q => q.to === 'user' && q.answer === undefined);
@@ -302,7 +422,7 @@ export function render() {
 export async function load() {
   [data, tasks] = await Promise.all([api.crewMap(), api.tasks.list()]);
   if (!viewingId) viewingId = tasks.find(t => ['running', 'waiting'].includes(t.status))?.id || null;
-  if (!primed) data.events.forEach(e => shown.set(eventKey(e), -Infinity));
+  if (!primed) [...data.events, ...liveActEvents()].forEach(e => shown.set(eventKey(e), -Infinity));
   primed = true;
   const first = view?.task.id !== viewingId;
   view = viewingId ? await api.tasks.get(viewingId) : null;
@@ -328,7 +448,7 @@ function agentDrawer(id) {
   const team = teamOf(agent.team);
   const rows = [['Kind', state.info.roles.find(r => r.id === agent.kind)?.label || agent.kind], ['Team', team?.name || 'None'], ['Account', `${account.name}${state.overview[account.id]?.plan ? ` · ${state.overview[account.id].plan}` : ''}`],
     ['Model', account.model || 'Default'], ['Status', STATUS[statusOf(agent)]]];
-  openDrawer(`<div class="dsec">${rows.map(([k, v]) => `<div class="drow"><span class="muted">${esc(k)}</span><span>${esc(v)}</span></div>`).join('')}</div>`
+  openDrawer(`<div class="dsec">${drawerRows(rows)}</div>`
     + `${last?.result ? `<div class="dsec"><span class="cap">Last report</span><div class="res open">${esc(last.result)}</div></div>` : ''}`
     + `<div class="dsec acts">${last ? button('Open log', { kind: 'sm', attrs: `data-open-log="${last.id}"` }) : ''}${button('Account settings', { kind: 'sm', attrs: `data-account="${account.id}"` })}</div>`,
   { title: agent.title, lead: `<span class="mini" style="--account:${colorHex(account.color)}">${mascotSVG(account, 24)}</span>` });
@@ -339,6 +459,20 @@ function teamDrawer(id) {
   const line = a => `<div class="drow"><span>${esc(a.title)}</span><span class="muted">${esc(accountFor(a.account).name)} · ${STATUS[statusOf(a)]}</span></div>`;
   openDrawer(`<div class="dsec"><span class="cap">Purpose</span><div>${esc(team.purpose)}</div></div><div class="dsec"><span class="cap">Lead</span>${line(agentOf(team.lead))}</div>`
     + `<div class="dsec"><span class="cap">Members</span>${team.members.map(m => line(agentOf(m))).join('') || '<div class="muted">None</div>'}</div>`, { title: team.name });
+}
+
+function sessionDrawer(id) {
+  const s = data.sessions.find(x => x.id === id);
+  if (!s) return;
+  const account = accountFor(s.agent);
+  const rows = [['Account', account.name], ['Model', s.model || 'Unknown'], ['Status', s.working ? 'Working' : 'Idle'], ['Last active', fmt.ago(s.lastActivity)]];
+  const subagents = data.sessions.filter(x => x.parent === id);
+  openDrawer(`<div class="dsec">${drawerRows(rows)}</div>`
+    + `<div class="dsec"><span class="cap">Folder</span><div class="mono">${esc(s.cwd || 'Unknown')}</div></div>`
+    + `<div class="dsec"><span class="cap">Recent activity</span>${actsOf(s).map(a => actRow(a, s.id)).join('') || '<div class="muted">Nothing yet</div>'}</div>`
+    + `${subagents.length ? `<div class="dsec"><span class="cap">Subagents</span>${subagents.map(x => `<div class="drow"><span>${esc(x.label)}</span><span class="muted">${x.working ? 'Working' : fmt.ago(x.lastActivity)}</span></div>`).join('')}</div>` : ''}`
+    + `<div class="dsec acts">${s.cwd ? button('Open folder', { kind: 'sm', attrs: `data-open-folder="${esc(s.cwd)}"` }) : ''}${button('Account settings', { kind: 'sm', attrs: `data-account="${account.id}"` })}</div>`,
+  { title: s.title || s.label, lead: `<span class="mini" style="--account:${colorHex(account.color)}">${mascotSVG(account, 24)}</span>` });
 }
 
 function memoryDrawer() {
@@ -432,6 +566,10 @@ export function mount(el) {
   on(root, 'click', '[data-node="agent"]', g => { if (view && agentOf(g.dataset.id)) agentDrawer(g.dataset.id); });
   on(root, 'click', '[data-node="team"]', g => teamDrawer(g.dataset.id));
   on(root, 'click', '[data-node="memory"]', memoryDrawer);
+  on(root, 'click', '[data-node="session"]', g => sessionDrawer(g.dataset.id));
+  on(root, 'click', '[data-node="account"]', g => benchDrawer(g.dataset.id));
+  on(root, 'click', '[data-session]', (card, e) => { if (!e.target.closest('[data-open-folder]')) sessionDrawer(card.dataset.session); });
+  on(root, 'click', '[data-open-folder]', btn => { if (btn.dataset.openFolder) api.openPath(btn.dataset.openFolder); });
   on(root, 'click', '[data-bench]', btn => benchDrawer(btn.dataset.bench));
   root.addEventListener('contextmenu', e => {
     const node = e.target.closest('[data-bench]');
@@ -440,6 +578,7 @@ export function mount(el) {
   });
   on(drawer, 'click', '[data-open-log]', btn => api.openPath(`${view.dir}\\runs\\${btn.dataset.openLog}.log`));
   on(drawer, 'click', '[data-account]', btn => openEditor(btn.dataset.account));
+  on(drawer, 'click', '[data-open-folder]', btn => api.openPath(btn.dataset.openFolder));
   on(drawer, 'click', '[data-make-leader]', btn => setLeader(btn.dataset.makeLeader));
   on(drawer, 'click', '[data-review]', () => { tab = 'memory'; $('#drawer [data-drawer-close]').click(); render(); });
   new ResizeObserver(() => requestAnimationFrame(drawMap)).observe(root);

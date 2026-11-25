@@ -6,6 +6,8 @@ const { buildContext, attribute } = require('./attribution');
 const { aggregate } = require('./aggregate');
 
 const WORKING_MS = 60 * 1000;
+// A turn that hasn't ended is still working through long tool calls, unless it went quiet this long.
+const MID_TURN_MS = 5 * 60 * 1000;
 const ACTIVE_MS = 15 * 60 * 1000;
 
 // Shared homes hold every account's sessions; an account with its own CLI home owns everything in it.
@@ -48,7 +50,9 @@ function createUsage(cacheFile) {
       const sub = parts.lastIndexOf('subagents');
       return [{
         id: path.basename(file).replace(/\.jsonl(\.zst)?$/, ''), parent: sub > 0 ? parts[sub - 1] : null, file,
-        provider: rec.provider, account: attribute(file, rec, ctx, accounts), cwd: rec.cwd, lastActivity, working: now - lastActivity < WORKING_MS,
+        provider: rec.provider, account: attribute(file, rec, ctx, accounts), cwd: rec.cwd, lastActivity,
+        working: now - lastActivity < (rec.ended ? WORKING_MS : MID_TURN_MS),
+        title: rec.title, model: rec.msgs.length ? rec.msgs[rec.msgs.length - 1][1] : rec.model, acts: rec.acts,
       }];
     });
   }
