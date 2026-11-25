@@ -24,12 +24,8 @@ export const button = (label, { kind = '', icon = '', attrs = '' } = {}) =>
 
 export const badge = (text, { tone = '', attrs = '' } = {}) => `<span class="badge ${tone}" ${attrs}>${esc(text)}</span>`;
 
-export const chip = (label, { on: active = false, attrs = '' } = {}) =>
-  `<button class="chip ${active ? 'on' : ''}" aria-pressed="${active}" ${attrs}>${esc(label)}</button>`;
-
-// `locked` is the reason a switch can't be changed; it shows as a tooltip over the dimmed switch.
-export const toggle = (name, active, label, locked = '') =>
-  `<span${locked ? ` data-tip="${tip(locked)}"` : ''}><button class="switch ${active ? 'on' : ''}" data-toggle="${name}" role="switch" aria-checked="${!!active}" aria-label="${esc(label)}"${locked ? ' disabled' : ''}></button></span>`;
+export const toggle = (name, active, label) =>
+  `<button class="switch ${active ? 'on' : ''}" data-toggle="${name}" role="switch" aria-checked="${!!active}" aria-label="${esc(label)}"></button>`;
 
 export const onToggle = (root, name, handler) => on(root, 'click', `[data-toggle="${name}"]`, btn => handler(btn.getAttribute('aria-checked') !== 'true'));
 
@@ -265,8 +261,6 @@ export const ICONS = {
   close: '<svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg>',
   desktop: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="8" rx="1.5"/><path d="M6 14h4M8 11v3"/></svg>',
   book: '<svg viewBox="0 0 16 16"><path d="M2 3h4a2 2 0 0 1 2 2v8a1.5 1.5 0 0 0-1.5-1.5H2zM14 3h-4a2 2 0 0 0-2 2v8a1.5 1.5 0 0 1 1.5-1.5H14z"/></svg>',
-  lock: '<svg viewBox="0 0 16 16"><rect x="3.5" y="7" width="9" height="6.5" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/></svg>',
-  chevronLeft: '<svg viewBox="0 0 16 16"><path d="M10 4L6 8l4 4"/></svg>',
   chevronRight: '<svg viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg>',
   terminal: '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M5 7l2 1.5L5 10M8.5 10h2.5"/></svg>',
   file: '<svg viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3"/></svg>',
@@ -275,4 +269,7 @@ export const ICONS = {
   branch: '<svg viewBox="0 0 16 16"><circle cx="4.5" cy="3.5" r="1.6"/><circle cx="4.5" cy="12.5" r="1.6"/><circle cx="11.5" cy="6" r="1.6"/><path d="M4.5 5.1v5.8M11.5 7.6c0 2.4-3.5 2-6.4 3.6"/></svg>',
   list: '<svg viewBox="0 0 16 16"><path d="M6.5 4.5H13M6.5 8H13M6.5 11.5H13M3 4.5h.1M3 8h.1M3 11.5h.1"/></svg>',
   tool: '<svg viewBox="0 0 16 16"><path d="M10.4 2.6a3 3 0 0 0-3.7 3.9L2.8 10.4a1.3 1.3 0 0 0 1.8 1.8l3.9-3.9a3 3 0 0 0 3.9-3.7l-1.8 1.8-1.6-.4-.4-1.6z"/></svg>',
+  plug: '<svg viewBox="0 0 16 16"><path d="M6 2v3M10 2v3M4.5 5h7v2.5a3.5 3.5 0 0 1-7 0zM8 11v3"/></svg>',
+  expand: '<svg viewBox="0 0 16 16"><path d="M2.5 6V2.5H6M10 2.5h3.5V6M13.5 10v3.5H10M6 13.5H2.5V10"/></svg>',
+  compress: '<svg viewBox="0 0 16 16"><path d="M6 2.5V6H2.5M13.5 6H10V2.5M10 13.5V10h3.5M2.5 10H6v3.5"/></svg>',
 };

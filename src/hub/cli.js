@@ -5,7 +5,6 @@ const childProcess = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { FILE_TOOLS } = require('./guard');
 
 const CLIS = {
   claude: {
@@ -47,7 +46,7 @@ function cliEnv(account, base = process.env) {
 // Existence only: the credentials file holds tokens and is never read here.
 const signedIn = account => Boolean(CLIS[account.provider]) && exists(path.join(homeOf(account), CLIS[account.provider].credentials));
 
-// The chosen model and effort as CLI arguments, for the terminal and for headless runs.
+// The chosen model and effort as CLI arguments.
 function modelArgs(account) {
   const cli = CLIS[account.provider];
   return [...(account.model ? cli.modelArgs(account.model) : []), ...(account.effort ? cli.effortArgs(account.effort) : [])];
@@ -69,55 +68,6 @@ function spawnCli(file, args, options = {}) {
     return childProcess.spawn('cmd.exe', ['/d', '/s', '/c', line], { ...options, windowsVerbatimArguments: true });
   }
   return childProcess.spawn(file, args, options);
-}
-
-const SERVER_NAME = 'ultron-hub';
-const tomlValue = JSON.stringify;
-
-// A run's hub server: Claude reads it from an --mcp-config file; Codex has no such flag, so every
-// key goes through -c and the run works whether or not the user connected the agents.
-const HEADLESS = {
-  claude: (account, { sessionId, resume, mcpFile, settingsFile, systemFile }) => [
-    '-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'bypassPermissions',
-    ...modelArgs(account), resume ? '--resume' : '--session-id', sessionId,
-    '--mcp-config', mcpFile, '--settings', settingsFile, '--append-system-prompt-file', systemFile,
-  ],
-  chatgpt: (account, { sessionId, resume, server }) => [
-    'exec', ...(resume ? ['resume', sessionId] : []), '--json', ...modelArgs(account),
-    '-c', 'sandbox_mode="workspace-write"', '-c', 'approval_policy="never"', '--skip-git-repo-check',
-    '-c', `mcp_servers.${SERVER_NAME}.command=${tomlValue(server.command)}`, '-c', `mcp_servers.${SERVER_NAME}.args=${tomlValue(server.args)}`,
-    ...Object.entries(server.env).flatMap(([key, value]) => ['-c', `mcp_servers.${SERVER_NAME}.env.${key}=${tomlValue(value)}`]), '-',
-  ],
-};
-
-const headlessArgs = (account, options) => HEADLESS[account.provider](account, options);
-
-const claudeLine = message => {
-  if (message.type === 'system' && message.subtype === 'init') return [{ sessionId: message.session_id }];
-  if (message.type === 'assistant') {
-    return (message.message?.content || []).filter(b => b.type === 'tool_use' && FILE_TOOLS.includes(b.name))
-      .map(b => ({ file: b.input.file_path || b.input.notebook_path })).filter(f => f.file);
-  }
-  if (message.type !== 'result') return [];
-  return message.is_error || message.subtype !== 'success' ? [{ error: message.result || message.subtype }] : [{ result: message.result }];
-};
-
-const codexLine = message => {
-  const item = message.item || {};
-  if (message.type === 'thread.started') return [{ sessionId: message.thread_id }];
-  if (message.type === 'item.completed' && item.type === 'agent_message') return [{ result: item.text }];
-  if (message.type === 'item.completed' && item.type === 'file_change') return (item.changes || []).map(c => ({ file: c.path }));
-  if (message.type === 'turn.failed') return [{ error: message.error?.message || 'The turn failed' }];
-  return message.type === 'error' ? [{ error: message.message }] : [];
-};
-
-const STREAMS = { claude: claudeLine, chatgpt: codexLine };
-
-// One stdout line from a headless run becomes zero or more of { sessionId }, { file }, { result }, { error }.
-function parseStream(provider, line) {
-  let message;
-  try { message = JSON.parse(line); } catch { return []; }
-  return STREAMS[provider](message);
 }
 
 const DETECT_TIMEOUT_MS = 25000;
@@ -258,4 +208,4 @@ async function detect(account, options) {
   }
 }
 
-module.exports = { CLIS, exists, which, homeOf, cliEnv, signedIn, spawnCli, killTree, modelArgs, headlessArgs, parseStream, tierOf, parseClaudeInit, parseCodexReplies, detect };
+module.exports = { CLIS, exists, which, homeOf, cliEnv, signedIn, spawnCli, killTree, modelArgs, tierOf, parseClaudeInit, parseCodexReplies, detect };

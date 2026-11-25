@@ -49,7 +49,7 @@ function createUsage(cacheFile) {
       const parts = file.split(path.sep);
       const sub = parts.lastIndexOf('subagents');
       return [{
-        id: path.basename(file).replace(/\.jsonl(\.zst)?$/, ''), parent: sub > 0 ? parts[sub - 1] : null, file,
+        id: path.basename(file).replace(/\.jsonl(\.zst)?$/, ''), sessionId: rec.sessionId, entrypoint: rec.entrypoint, parent: sub > 0 ? parts[sub - 1] : null, file,
         provider: rec.provider, account: attribute(file, rec, ctx, accounts), cwd: rec.cwd, lastActivity,
         working: now - lastActivity < (rec.ended ? WORKING_MS : MID_TURN_MS),
         title: rec.title, model: rec.msgs.length ? rec.msgs[rec.msgs.length - 1][1] : rec.model, acts: rec.acts,

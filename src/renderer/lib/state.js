@@ -7,7 +7,7 @@ export const state = {
   overview: {},
   targets: {},
   models: {},
-  info: { roles: [], sections: [] },
+  info: { sections: [] },
   usageData: null,
   usage: { account: 'all', range: '30d', metric: 'total', rhythm: 'week', projectPage: 0 },
 };

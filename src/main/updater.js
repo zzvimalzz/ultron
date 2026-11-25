@@ -17,8 +17,9 @@ function createUpdater({ onReady }) {
     try {
       const result = await autoUpdater.checkForUpdatesAndNotify();
       return result?.isUpdateAvailable ? 'available' : 'current';
-    } catch {
-      return 'error';
+    } catch (err) {
+      // GitHub answers 404 for a private repository's releases when the request carries no token.
+      return /\b(401|403|404)\b/.test(err.message) ? 'private' : 'error';
     }
   }
 

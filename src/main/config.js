@@ -4,11 +4,9 @@ const path = require('path');
 const { LOCAL, ROAMING, findShortcuts, resolveDataDir } = require('./profiles');
 const { PROVIDERS, isInstalled, isLaunchOnly } = require('./targets');
 const { HUB_DIR } = require('../hub/files');
-const { DEFAULT_ROLES } = require('../hub/roles');
 
-const VERSION = 9;
+const VERSION = 10;
 const HOMES_DIR = path.join(HUB_DIR, 'homes');
-const defaultRoles = provider => [...(DEFAULT_ROLES[provider] || [])];
 
 function defaultClaudeDataDir() {
   const base = path.join(LOCAL, 'Claude-Data');
@@ -35,9 +33,6 @@ function account(provider, index, fields) {
     planAnswer: null,
     model: '',
     effort: '',
-    roles: defaultRoles(provider),
-    inCrew: !isLaunchOnly(provider),
-    maxRuns: 2,
     ...fields,
   };
 }
@@ -94,17 +89,16 @@ function migrate(config) {
     a.planAnswer ??= null;
     a.model ??= '';
     a.effort ??= '';
-    a.roles ??= defaultRoles(a.provider);
-    a.inCrew ??= true;
-    a.maxRuns ??= 2;
+    delete a.roles;
+    delete a.inCrew;
+    delete a.maxRuns;
     delete a.launches;
     delete a.target;
     delete a.pathHints;
   }
-  config.crew ||= { connected: false, leader: null };
-  config.memory ||= { dir: config.crew.memoryDir || '', tidy: false, curator: { account: '', model: '' } };
-  delete config.crew.memoryDir;
-  config.ultron ||= { lastFolder: '' };
+  config.memory ||= { dir: config.crew?.memoryDir || '', tidy: false, curator: { account: '', model: '' } };
+  config.crew = { connected: Boolean(config.crew?.connected) };
+  delete config.ultron;
   config.setupDone ??= config.accounts.length > 0;
   if (!config.accounts.some(a => a.provider === 'chatgpt') && isInstalled('chatgpt')) {
     config.accounts.push(account('chatgpt', 0, { dataDir: chatgptDataDir() }));

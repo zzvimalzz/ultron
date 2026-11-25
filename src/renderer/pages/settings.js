@@ -14,6 +14,7 @@ const UPDATE_TEXT = {
   ready: 'Update ready · Restart from the sidebar',
   available: 'Downloading the update…',
   current: "You're up to date",
+  private: "Couldn't read the releases: the GitHub repository is private",
   error: "Couldn't check for updates",
 };
 

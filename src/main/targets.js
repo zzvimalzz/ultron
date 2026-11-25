@@ -1,5 +1,6 @@
 'use strict';
 const os = require('os');
+const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const { shell } = require('electron');
@@ -8,7 +9,7 @@ const { CLIS, exists, which, cliEnv, modelArgs } = require('../hub/cli');
 const { HUB_DIR } = require('../hub/files');
 
 // multiDesktop: Claude runs one window per --user-data-dir; ChatGPT is a single-instance MSIX.
-// A provider with no CLIS row is launch-only: it opens in the browser and never joins the crew (see .doc/notes/gemini.md and grok.md).
+// A provider with no CLIS row is launch-only: it opens in the browser with no CLI home or plan badge (see .doc/notes/gemini.md and grok.md).
 const PROVIDERS = {
   claude: { label: 'Claude', web: 'https://claude.ai', download: 'https://claude.ai/download', defaultTarget: 'claude-desktop', cliTarget: 'claude-cli', multiDesktop: true },
   chatgpt: { label: 'ChatGPT', web: 'https://chatgpt.com', download: 'https://chatgpt.com/download', defaultTarget: 'chatgpt-desktop', cliTarget: 'codex-cli', multiDesktop: false, color: 3 },
@@ -71,17 +72,17 @@ const TARGETS = [
     open: (exe, a) => detached(exe, splitArgs(a.args)) },
   { id: 'claude-cli', label: 'Claude Code CLI', provider: 'claude', cli: true,
     locate: () => which('claude'),
-    open: (exe, a) => inTerminal('Claude Code', exe, modelArgs(a), cliEnv(a)) },
+    open: (exe, a, ctx) => inTerminal('Claude Code', exe, [...modelArgs(a), ...(ctx.resume ? ['--resume', ctx.resume] : [])], cliEnv(a), ctx.cwd) },
   { id: 'chatgpt-desktop', label: 'ChatGPT Desktop', provider: 'chatgpt',
     locate: chatgptAppId,
     open: appId => detached('explorer.exe', [`shell:AppsFolder\\${appId}`]) },
   { id: 'codex-cli', label: 'Codex CLI', provider: 'chatgpt', cli: true,
     locate: () => which('codex'),
-    open: (exe, a) => inTerminal('Codex', exe, modelArgs(a), cliEnv(a)) },
+    open: (exe, a, ctx) => inTerminal('Codex', exe, [...modelArgs(a), ...(ctx.resume ? ['resume', ctx.resume] : [])], cliEnv(a), ctx.cwd) },
   // VS Code is single-instance, so an account with its own CLI home gets its own user-data folder and window.
   { id: 'vscode', label: 'VS Code', cli: true,
     locate: vscodeExe,
-    open: (exe, a) => detached(exe, a.cliHome ? ['--user-data-dir', path.join(HUB_DIR, 'vscode', a.id)] : [], { env: cliEnv(a) }) },
+    open: (exe, a, ctx) => detached(exe, [...(a.cliHome ? ['--user-data-dir', path.join(HUB_DIR, 'vscode', a.id)] : []), ...(ctx.cwd ? [ctx.cwd] : [])], { env: cliEnv(a) }) },
   { id: 'web', label: 'Web browser',
     locate: () => true,
     open: (_, a) => shell.openExternal(PROVIDERS[a.provider].web) },
@@ -104,14 +105,31 @@ function availableTargets(account, accounts) {
     .map(t => ({ id: t.id, label: t.label, cli: Boolean(t.cli), locked: lockedReason(account, accounts, t) }));
 }
 
-async function openAccount(account, targetId, accounts) {
+// `ctx` is { cwd, resume } for a session: the folder to start in and the session to continue.
+async function openAccount(account, targetId, accounts, ctx = {}) {
   const target = targetById(targetId) || targetById(PROVIDERS[account.provider].defaultTarget);
   const located = target.locate();
   if (!located) throw new Error(`${target.label} isn't installed`);
   const locked = lockedReason(account, accounts, target);
   if (locked) throw new Error(locked);
-  await target.open(located, account);
+  await target.open(located, account, ctx);
   return target.id;
+}
+
+// Where a session runs, from the entrypoint its transcript records: the desktop app, VS Code, or else a terminal.
+function sessionTarget(session, provider) {
+  const { defaultTarget, cliTarget } = PROVIDERS[provider];
+  if (/desktop/i.test(session.entrypoint || '')) return defaultTarget;
+  return /vscode/i.test(session.entrypoint || '') ? 'vscode' : cliTarget;
+}
+
+// Opens a session where it runs: the desktop app, VS Code in its folder, or a terminal resuming it. A terminal session
+// that is still working already has its own window, and resuming it would fork the chat, so it is left alone (null).
+async function openSession(session, account, accounts) {
+  const targetId = sessionTarget(session, account.provider);
+  if (targetId === PROVIDERS[account.provider].cliTarget && session.working) return null;
+  const cwd = session.cwd && fs.existsSync(session.cwd) ? session.cwd : undefined;
+  return targetById(await openAccount(account, targetId, accounts, { cwd, resume: session.sessionId })).label;
 }
 
 // part: 'cli' opens the official login in a terminal with the account's own home; 'desktop' opens the app, which shows its own sign-in.
@@ -130,4 +148,4 @@ function installs() {
     : { label: p.label, color: p.color, desktop: isInstalled(provider), cli: Boolean(which(CLIS[provider].command)), download: p.download, multiDesktop: p.multiDesktop }]));
 }
 
-module.exports = { PROVIDERS, isLaunchOnly, inTerminal, isInstalled, installs, availableTargets, openAccount, signIn };
+module.exports = { PROVIDERS, isLaunchOnly, inTerminal, isInstalled, installs, availableTargets, openAccount, openSession, sessionTarget, signIn };

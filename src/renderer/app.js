@@ -29,6 +29,8 @@ function show(page) {
   current = page;
   $$('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.page === page));
   $$('.page').forEach(p => p.classList.toggle('active', p.id === `page-${page}`));
+  $('.main').classList.toggle('immersive', page === 'ultron');
+  if (page !== 'ultron') ultron.leave();
   moveNav();
   $('#scroller').scrollTop = 0;
   if (page === 'usage' && !state.usageData) usage.load();
@@ -57,7 +59,6 @@ async function refreshLive() {
   if (state.usageData) await usage.load();
   if (current === 'ultron' && !modalOpen()) await ultron.load();
   setup.refresh();
-  $('.nav-item[data-page="ultron"]').classList.toggle('ping', (await api.tasks.list()).some(t => t.status === 'waiting'));
 }
 
 function onKey(e) {
@@ -97,7 +98,6 @@ async function boot() {
   await refreshLive();
   api.onLive(refreshLive);
   api.onToast(text => toast(text));
-  api.onGoto(page => show(page));
   const showUpdate = () => { $('#updatePill').hidden = false; };
   $('#updatePill').addEventListener('click', api.installUpdate);
   api.onUpdateReady(showUpdate);

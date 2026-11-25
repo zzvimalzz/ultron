@@ -31,5 +31,5 @@ export function describe([t, tool, detail], memoryDir = '') {
   if (memoryDir && slashes(detail).includes(slashes(memoryDir))) {
     return { t, kind: 'memory', verb: kind === 'edit' ? 'Writing memory' : 'Reading memory', target, icon: ICONS.book, writes: kind === 'edit' };
   }
-  return { t, kind, verb, target, icon: ICONS[icon] };
+  return { t, kind, verb, target, icon: ICONS[icon], server: /^mcp__(.+?)__/.exec(tool)?.[1] };
 }

@@ -1,18 +1,14 @@
 'use strict';
 // Ultron Hub: a stdio MCP server that Claude Code and Codex start (through Ultron's executable in
-// Node mode) to share memory and messages. Ultron keeps crew.json and sessions.json current.
+// Node mode) to share memory and messages. Ultron keeps crew.json (the account roster) and sessions.json current.
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const memory = require('./memory');
-const { crewLine } = require('./prompts');
 const { object, text } = require('./schema');
-const tasks = require('./tasks');
-const { TASK_TOOLS } = require('./team-tools');
 const { HUB_DIR, MEMORY_DIR, CREW_FILE, SESSIONS_FILE, readJson, writeJson, appendEvent, recentEvents } = require('./files');
 
 const PROVIDER = process.env.ULTRON_PROVIDER || 'claude';
-const { ULTRON_TASK: TASK, ULTRON_RUN: RUN, ULTRON_AGENT: AGENT, ULTRON_ROLE: ROLE } = process.env;
 const PROVIDER_NAMES = { claude: 'Claude', chatgpt: 'ChatGPT' };
 const WEEK_MS = 7 * 24 * 3600 * 1000;
 const INBOX_DIR = path.join(HUB_DIR, 'inbox');
@@ -27,8 +23,7 @@ function whoAmI() {
     .filter(s => s.provider === PROVIDER && s.cwd && norm(s.cwd) === cwd)
     .sort((a, b) => b.last - a.last)[0];
   const mine = crew.agents.filter(a => a.provider === PROVIDER);
-  const taskAccount = RUN && tasks.agentsOf(TASK).find(a => a.id === AGENT)?.account;
-  const id = taskAccount || (session ? session.agent : mine.length === 1 ? mine[0].id : null);
+  const id = session ? session.agent : mine.length === 1 ? mine[0].id : null;
   return { crew, me: crew.agents.find(a => a.id === id) || null, mine };
 }
 
@@ -39,21 +34,15 @@ function sender() {
   return { agent: me ? me.id : null, provider: PROVIDER, cwd: process.cwd() };
 }
 
-const notInCrew = agent => ({ free: 'free plan', unknown: 'plan unknown' })[agent.tier] || 'left out by the user';
-
 function crewTool() {
   const { crew, me } = whoAmI();
-  const lines = crew.agents.map(a => {
-    const flags = `${a.id === crew.leader ? ' (leader)' : ''}${me && a.id === me.id ? ' (you)' : ''}${a.eligible ? '' : ` (not in crew: ${notInCrew(a)})`}`;
-    return crewLine(a, flags);
-  });
-  return lines.join('\n') || 'No agents yet. Open Ultron to set up the crew.';
+  const lines = crew.agents.map(a => `- ${a.name}${me && a.id === me.id ? ' (you)' : ''}: ${a.tier} · ${a.model || 'default'}${a.effort ? `/${a.effort}` : ''} · ${a.status}`);
+  return lines.join('\n') || 'No agents yet. Open Ultron and add an account.';
 }
 
-// Every memory tool leaves one event with a title only, never note text, so Ultron can show what the crew is doing.
+// Every memory tool leaves one event with a title only, never note text, so Ultron can show what the agents are doing.
 function memoryEvent(action, title) {
-  appendEvent({ type: 'memory', action, title, from: sender(), ...(RUN ? { task: TASK, taskAgent: AGENT } : {}) });
-  if (RUN) tasks.logEvent(TASK, { type: 'memory', action, title, agent: AGENT });
+  appendEvent({ type: 'memory', action, title, from: sender() });
 }
 
 const source = () => {
@@ -103,9 +92,8 @@ function sendMessage({ to, text }) {
   const { crew } = whoAmI();
   const key = to.trim().toLowerCase();
   const target = ['everyone', 'all'].includes(key) ? 'all'
-    : key === 'leader' ? crew.leader
-      : crew.agents.find(a => a.name.toLowerCase() === key || a.id === to)?.id;
-  if (!target) throw new Error(`No agent called "${to}". Agents: ${crew.agents.map(a => a.name).join(', ')}, or "leader" / "everyone".`);
+    : crew.agents.find(a => a.name.toLowerCase() === key || a.id === to)?.id;
+  if (!target) throw new Error(`No agent called "${to}". Agents: ${crew.agents.map(a => a.name).join(', ')}, or "everyone".`);
   appendEvent({ type: 'message', from: sender(), to: target, text });
   return `Sent to ${target === 'all' ? 'everyone' : crew.agents.find(a => a.id === target).name}.`;
 }
@@ -125,7 +113,7 @@ function checkInbox() {
 
 const TOOLS = [
   { name: 'crew', run: crewTool, inputSchema: object(),
-    description: 'List the AI agents on this PC: the leader, what each one does, and who is working right now.' },
+    description: 'List the AI agents on this PC, their plan and model, and who is working right now.' },
   { name: 'context', run: contextTool, inputSchema: object(),
     description: "What you should know right now: durable memory and the current project's overview and state. Call at the start of substantive work." },
   { name: 'recall', run: recallTool, inputSchema: object({ query: text('Words to search for; leave empty to list recent notes') }),
@@ -140,22 +128,18 @@ const TOOLS = [
     description: 'Replace a stale note; the old version is archived.' },
   { name: 'forget', run: forgetTool, inputSchema: object({ file: text('Path inside the vault') }, ['file']),
     description: 'Archive a note that is no longer true. Nothing is deleted.' },
-  { name: 'send_message', run: sendMessage, inputSchema: object({ to: text('Agent name, "leader" or "everyone"'), text: text('The message') }, ['to', 'text']),
-    description: 'Send a message to another agent. Use crew to see who does which kind of work.' },
+  { name: 'send_message', run: sendMessage, inputSchema: object({ to: text('Agent name or "everyone"'), text: text('The message') }, ['to', 'text']),
+    description: 'Send a message to another agent. Use crew to see who is there.' },
   { name: 'check_inbox', run: checkInbox, inputSchema: object(),
     description: 'Read the messages other agents sent you since you last checked.' },
 ];
 
-// Task tools exist only inside a task run, and each role sees its own.
-const visibleTools = () => [...TOOLS, ...TASK_TOOLS.filter(t => RUN && t.roles.includes(ROLE))];
-
 function instructions() {
   const { crew } = whoAmI();
-  const leader = crew.agents.find(a => a.id === crew.leader);
   return [
-    `Ultron Hub connects you to the other AI agents on this PC (${crew.agents.map(a => a.name).join(', ') || 'none yet'}).${leader ? ` The leader is ${leader.name}.` : ''}`,
+    `Ultron Hub connects you to the other AI agents on this PC (${crew.agents.map(a => a.name).join(', ') || 'none yet'}).`,
     `This device's memory vault is ${memoryDir()}. Call context at the start, recall before work that may have history, and remember outcomes (kind: session) and decisions before you finish. Follow PROTOCOL.md in the vault.`,
-    'Use the crew tool to see which agent does which kind of work. Use send_message to hand work over, and check_inbox when other agents are mentioned.',
+    'Use the crew tool to see who else is here. Use send_message to pass work or notes on, and check_inbox when other agents are mentioned.',
   ].join('\n');
 }
 
@@ -167,9 +151,9 @@ async function handle(msg) {
     return { protocolVersion: params.protocolVersion || '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'ultron-hub', version: '1.0.0' }, instructions: instructions() };
   }
   if (method === 'ping') return {};
-  if (method === 'tools/list') return { tools: visibleTools().map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) };
+  if (method === 'tools/list') return { tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) };
   if (method === 'tools/call') {
-    const tool = visibleTools().find(t => t.name === params.name);
+    const tool = TOOLS.find(t => t.name === params.name);
     if (!tool) throw Object.assign(new Error(`Unknown tool ${params.name}`), { code: -32602 });
     try {
       return { content: [{ type: 'text', text: await tool.run(params.arguments || {}) }] };

@@ -1,6 +1,6 @@
 import { $, esc, on } from '../lib/dom.js';
 import { ACCESSORIES, COLORS, EYES, colorHex, mascotSVG } from '../lib/mascots.js';
-import { ICONS, button, chip, closeDrawer, onSegment, onSelect, onToggle, openDrawer, openModal, segmented, select, skeleton, tip, toast, toggle, updateDrawer } from '../lib/ui.js';
+import { ICONS, button, closeDrawer, onSelect, openDrawer, openModal, select, skeleton, tip, toast, updateDrawer } from '../lib/ui.js';
 import { planBadge, planChoices } from '../lib/plan.js';
 import { ago } from '../lib/format.js';
 import { api, state, accountById, loadModels, loadTargets, saveConfig, toastError } from '../lib/state.js';
@@ -59,31 +59,18 @@ function modelSections(account) {
   if (!models) return section('Model', skeleton('100%', '34px'));
   if (!models.length) return '';
   const efforts = models.find(m => m.id === account.model)?.efforts || [];
-  return section('Model', select('model', models.map(m => ({ value: m.id, label: m.label, hint: m.description })), account.model))
-    + (efforts.length ? section('Effort', segmented('effort', [{ value: '', label: 'Default' }, ...efforts.map(e => ({ value: e, label: e }))], account.effort)) : '');
-}
-
-function ultronSection(account) {
-  const tier = state.overview[account.id]?.tier;
-  const locked = tier === 'free' ? 'Free plan' : tier === 'unknown' ? 'Plan unknown' : '';
-  return section('Ultron', `<div class="row"><span class="grow">In crew</span>${toggle('inCrew', account.inCrew && !locked, 'In crew', locked)}</div>`
-    + `<div class="row"><span class="grow">Parallel runs</span><span class="stepper">`
-    + `<button class="icon-btn" data-runs="-1" aria-label="Fewer parallel runs" ${account.maxRuns <= 1 ? 'disabled' : ''}>−</button><b>${account.maxRuns}</b>`
-    + `<button class="icon-btn" data-runs="1" aria-label="More parallel runs" ${account.maxRuns >= 4 ? 'disabled' : ''}>+</button></span></div>`);
+  const note = account.openWith.endsWith('-cli') ? '' : '<span class="muted">Used when this account opens in a terminal.</span>';
+  return section('Model', select('model', models.map(m => ({ value: m.id, label: m.label, hint: m.description })), account.model) + note)
+    + (efforts.length ? section('Effort', select('effort', [{ value: '', label: 'Default' }, ...efforts.map(e => ({ value: e, label: e }))], account.effort)) : '');
 }
 
 const openWithSection = account => section('Open with', `<div class="radios" role="radiogroup">${(state.targets[account.id] || []).map(t =>
   `<button class="radio" role="radio" aria-checked="${t.id === account.openWith}" data-target="${t.id}"${t.locked ? ` disabled data-tip="${tip(t.locked)}"` : ''}><i></i>${esc(t.label)}</button>`).join('')}</div>`);
 
-const crewSections = account => planSection(account)
-  + modelSections(account)
-  + section('Roles', `<div class="chips">${state.info.roles.map(r => chip(r.label, { on: account.roles.includes(r.id), attrs: `data-role="${r.id}"` })).join('')}</div>`)
-  + ultronSection(account);
-
 function drawerBody(account) {
   const look = appearance(account);
   const launchOnly = state.overview[account.id]?.launchOnly;
-  return (launchOnly ? '' : crewSections(account))
+  return (launchOnly ? '' : planSection(account) + modelSections(account))
     + openWithSection(account)
     + `<div class="dsec"><span class="cap">Appearance</span>${look.look}${look.fields}</div>`
     + (launchOnly ? '' : `<div class="dsec">${advanced(account)}</div>`)
@@ -148,14 +135,7 @@ export function mount() {
     const efforts = state.models[editingId].find(m => m.id === model).efforts;
     commit({ model, effort: efforts.includes(accountById(editingId).effort) ? accountById(editingId).effort : '' });
   });
-  onSegment(drawer, 'effort', effort => commit({ effort }));
-  on(drawer, 'click', '[data-role]', btn => {
-    const { roles } = accountById(editingId);
-    const id = btn.dataset.role;
-    commit({ roles: roles.includes(id) ? roles.filter(r => r !== id) : [...roles, id] });
-  });
-  onToggle(drawer, 'inCrew', inCrew => commit({ inCrew }));
-  on(drawer, 'click', '[data-runs]', btn => commit({ maxRuns: Math.min(4, Math.max(1, accountById(editingId).maxRuns + Number(btn.dataset.runs))) }));
+  onSelect(drawer, 'effort', effort => commit({ effort }));
   on(drawer, 'click', '[data-target]', btn => commit({ openWith: btn.dataset.target }));
   on(drawer, 'click', '[data-remove]', async btn => {
     if (btn.dataset.confirm !== '1') { btn.dataset.confirm = '1'; btn.textContent = 'Click again to remove'; return; }

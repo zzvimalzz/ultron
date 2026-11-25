@@ -79,34 +79,39 @@ test('modelArgs builds the arguments for each CLI from the chosen model and effo
   assert.deepStrictEqual(modelArgs({ provider: 'chatgpt', model: '', effort: '' }), []);
 });
 
-test('migrate adds the model, roles and crew fields and keeps values already set', () => {
-  const config = migrate({ accounts: [{ provider: 'claude', model: 'opus', roles: ['qa'] }, { provider: 'chatgpt' }] });
+test('migrate keeps the model, drops the old leader, roles and crew fields, and keeps the connected flag', () => {
+  const config = migrate({
+    accounts: [{ provider: 'claude', model: 'opus', roles: ['qa'], inCrew: true, maxRuns: 3 }, { provider: 'chatgpt' }],
+    crew: { connected: true, leader: 'claude-1', memoryDir: 'D:\vault' }, ultron: { lastFolder: 'x' },
+  });
   const [claude, chatgpt] = config.accounts;
-  assert.deepStrictEqual([claude.model, claude.effort, claude.roles, claude.inCrew, claude.maxRuns], ['opus', '', ['qa'], true, 2]);
-  assert.deepStrictEqual(chatgpt.roles, ['code', 'images', 'research', 'review']);
+  assert.deepStrictEqual([claude.model, claude.effort, chatgpt.model], ['opus', '', '']);
+  assert.deepStrictEqual(['roles', 'inCrew', 'maxRuns'].filter(key => key in claude || key in chatgpt), []);
+  assert.deepStrictEqual(config.crew, { connected: true });
+  assert.strictEqual(config.memory.dir, 'D:\vault');
+  assert.strictEqual('ultron' in config, false);
 });
 
-test('Gemini and Grok are launch-only: web target only, no CLI home, never in the crew', () => {
+test('Gemini and Grok are launch-only: web target only, no CLI home, never in the roster', () => {
   const { installs, isLaunchOnly } = require('../src/main/targets');
-  const { publish, crewMap, leaderId } = require('../src/main/crew');
+  const { publish, liveMap } = require('../src/main/crew');
   const gemini = blankAccount('gemini', []);
   const grok = blankAccount('grok', [gemini]);
   const claude = { ...blankAccount('claude', []), id: 'claude-1' };
   assert.deepStrictEqual([isLaunchOnly('gemini'), isLaunchOnly('grok'), isLaunchOnly('claude')], [true, true, false]);
-  assert.deepStrictEqual([gemini.name, grok.name, gemini.openWith, gemini.cliHome, gemini.inCrew, gemini.roles], ['Gemini 1', 'Grok 1', 'web', '', false, []]);
+  assert.deepStrictEqual([gemini.name, grok.name, gemini.openWith, gemini.cliHome], ['Gemini 1', 'Grok 1', 'web', '']);
   assert.deepStrictEqual(availableTargets(gemini, [gemini, grok]).map(t => t.id), ['web']);
   assert.strictEqual(signedIn(gemini), false);
   assert.deepStrictEqual(installs().gemini, { label: 'Gemini', color: 7, launchOnly: true });
 
-  const config = { accounts: [gemini, grok, claude], crew: { leader: gemini.id }, memory: { dir: TEMP }, connected: false };
-  assert.strictEqual(leaderId({ ...config, crew: { leader: null } }), 'claude-1');
+  const config = { accounts: [gemini, grok, claude], crew: { connected: false }, memory: { dir: TEMP } };
   publish(config, {}, []);
   const published = JSON.parse(fs.readFileSync(path.join(TEMP, '.ultron', 'crew.json'), 'utf8'));
   assert.deepStrictEqual(published.agents.map(a => a.id), ['claude-1']);
-  assert.deepStrictEqual(crewMap(config, {}, []).agents.map(a => [a.id, a.launchOnly, a.eligible]), [[gemini.id, true, false], [grok.id, true, false], ['claude-1', false, false]]);
+  assert.deepStrictEqual(liveMap(config, []), { connected: false, memoryDir: TEMP, sessions: [], memoryEvents: [] });
 });
 
-test('migrate gives a launch-only account no roles and keeps it out of the crew', () => {
+test('migrate gives a launch-only account the web target', () => {
   const [gemini] = migrate({ accounts: [{ provider: 'gemini' }] }).accounts;
-  assert.deepStrictEqual([gemini.roles, gemini.openWith], [[], 'web']);
+  assert.strictEqual(gemini.openWith, 'web');
 });
