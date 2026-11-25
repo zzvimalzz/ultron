@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('ultron', {
   runSetup: invoke('setup:run'),
   checkForUpdates: invoke('update:check'),
   installUpdate: invoke('update:install'),
+  sync: Object.fromEntries(['status', 'save', 'now', 'remove'].map(name => [name, invoke(`sync:${name}`)])),
   memory: Object.fromEntries(['setDir', 'search', 'pending', 'confirm', 'reject', 'keep', 'drop', 'recent'].map(name => [name, invoke(`memory:${name}`)])),
   onToast: fn => ipcRenderer.on('toast', (_e, text) => fn(text)),
   onUpdateReady: fn => ipcRenderer.on('update-ready', () => fn()),

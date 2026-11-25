@@ -75,8 +75,25 @@ function emptyTotals() {
   return { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, total: 0, messages: 0, sessions: 0, activeMs: 0 };
 }
 
+// Tokens per bucket, split by account. `first` is the earliest point, which starts the chart when the range is All.
+function buildTimeline(points, range, since, first, now) {
+  if (!since) since = Number.isFinite(first) ? startOfDay(first) : startOfDay(now);
+  const unit = bucketUnit(range, since, now);
+  const buckets = [];
+  for (let t = startOfBucket(since, unit); t <= now; t = nextBucket(t, unit)) buckets.push({ t, total: 0, output: 0, byAccount: {} });
+  const index = new Map(buckets.map((b, i) => [b.t, i]));
+  for (const p of points) {
+    const b = buckets[index.get(startOfBucket(p.t, unit))];
+    if (!b) continue;
+    b.total += p.tokens; b.output += p.output;
+    const ba = (b.byAccount[p.acct] ||= { total: 0, output: 0 });
+    ba.total += p.tokens; ba.output += p.output;
+  }
+  return { unit, buckets };
+}
+
 function aggregate(records, ctx, accounts, { account = 'all', range = '30d' } = {}, now = Date.now()) {
-  let since = rangeStart(range, now);
+  const since = rangeStart(range, now);
   const totals = emptyTotals();
   const perAccount = {};
   const lastActivity = {};
@@ -140,19 +157,6 @@ function aggregate(records, ctx, accounts, { account = 'all', range = '30d' } = 
     sources.set(src, (sources.get(src) || 0) + fileTokens);
   }
 
-  if (!since) since = Number.isFinite(first) ? startOfDay(first) : startOfDay(now);
-  const unit = bucketUnit(range, since, now);
-  const buckets = [];
-  for (let t = startOfBucket(since, unit); t <= now; t = nextBucket(t, unit)) buckets.push({ t, total: 0, output: 0, byAccount: {} });
-  const index = new Map(buckets.map((b, i) => [b.t, i]));
-  for (const p of points) {
-    const b = buckets[index.get(startOfBucket(p.t, unit))];
-    if (!b) continue;
-    b.total += p.tokens; b.output += p.output;
-    const ba = (b.byAccount[p.acct] ||= { total: 0, output: 0 });
-    ba.total += p.tokens; ba.output += p.output;
-  }
-
   const modelList = [...models.values()].sort((a, b) => b.total - a.total);
   const top = [...models.values()].sort((a, b) => b.messages - a.messages)[0];
   return {
@@ -161,7 +165,7 @@ function aggregate(records, ctx, accounts, { account = 'all', range = '30d' } = 
     totals,
     topModel: top ? { model: top.model, share: top.messages / totals.messages } : null,
     models: modelList,
-    timeline: { unit, buckets },
+    timeline: buildTimeline(points, range, since, first, now),
     rhythm: { weekStart, week, daysStart, days },
     projects: [...projects.values()]
       .map(p => ({ name: p.name, total: p.total, sessions: p.sessions.size, lastActive: p.lastActive }))
@@ -172,4 +176,4 @@ function aggregate(records, ctx, accounts, { account = 'all', range = '30d' } = 
   };
 }
 
-module.exports = { aggregate, prettyModel, projectName };
+module.exports = { aggregate, buildTimeline, prettyModel, projectName, rangeStart, startOfBucket, startOfDay, HOUR, DAY };

@@ -7,6 +7,7 @@ import { api, state } from '../lib/state.js';
 const RANGES = options([['24h', '24H'], ['7d', '7D'], ['30d', '30D'], ['90d', '90D'], ['all', 'All']]);
 const RHYTHMS = options([['week', 'Week'], ['month', 'Month'], ['year', 'Year']]);
 const METRICS = options([['total', 'Total'], ['output', 'Output']]);
+const SCOPES = options([['device', 'This device'], ['all', 'All devices']]);
 const PROJECT_ROWS = 6;
 const DAY = 86400000;
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -17,6 +18,7 @@ let loading = false;
 
 // Account tabs come from config and all-time data, so they never change with the range.
 function accountOptions() {
+  if (state.usageData?.scope === 'all') return state.usageData.accounts.map(a => ({ id: a.id, name: a.name, color: cssVar(a.color ? `--s${a.color}` : '--text-3') }));
   const has = state.usageData ? state.usageData.lastActivity : {};
   const list = state.config.accounts.map(a => ({ id: a.id, name: a.name, color: cssVar(`--s${a.color}`) }));
   if (has.other) list.push({ ...OTHER, color: cssVar('--text-3') });
@@ -87,7 +89,7 @@ function barList(items, valueText, colorFor) {
 
 function breakdown() {
   const data = state.usageData;
-  if (state.usage.account === 'all') {
+  if (state.usage.account === 'all' || data.scope === 'all') {
     const rows = accountOptions().map(a => {
       const used = data.perAccount[a.id] || {};
       return { ...a, value: used.total || 0, activeMs: used.activeMs || 0 };
@@ -110,7 +112,8 @@ function body() {
   const mix = [['Input', t.input, '--s1'], ['Cache write', t.cacheWrite, '--s3'], ['Cache read', t.cacheRead, '--s7'], ['Output', t.output, '--s2']];
   const mixTotal = t.total || 1;
   const share = v => { const p = (v / mixTotal) * 100; return p >= 10 ? `${p.toFixed(0)}%` : p >= 0.1 ? `${p.toFixed(1)}%` : p > 0 ? '<0.1%' : '0%'; };
-  const projects = paginate(data.projects, u.projectPage, PROJECT_ROWS);
+  const all = data.scope === 'all';
+  const projects = all ? null : paginate(data.projects, u.projectPage, PROJECT_ROWS);
   const series = u.account === 'all' ? chartSeries() : [];
 
   return `
@@ -138,7 +141,7 @@ function body() {
       <div class="chart" id="timeline"></div>
     </div>
 
-    <div class="card">
+    ${all ? '' : `<div class="card">
       <div class="card-head">
         <h2>When you work</h2>
         <div class="head-tools">
@@ -147,7 +150,7 @@ function body() {
         </div>
       </div>
       <div class="chart" id="rhythm"></div>
-    </div>
+    </div>`}
 
     <div class="grid-2">
       <div class="card">
@@ -155,19 +158,22 @@ function body() {
         <div class="scroll-area">${barList(data.models.map(m => ({ name: m.model, value: m[u.metric], messages: m.messages })), m => `${fmt.tokens(m.value)} · ${fmt.count(m.messages, 'response')}`)}</div>
       </div>
       <div class="card">
-        <div class="card-head"><h2>${u.account === 'all' ? 'By account' : 'By source'}</h2></div>
+        <div class="card-head"><h2>${u.account === 'all' || all ? 'By account' : 'By source'}</h2></div>
         <div class="scroll-area">${breakdown()}</div>
       </div>
     </div>
 
-    <div class="card">
+    ${all ? `<div class="card">
+      <div class="card-head"><h2>Devices</h2></div>
+      <div class="scroll-area">${barList(data.devices.map(d => ({ name: d.name, value: d.total, activeMs: d.activeMs })), r => `${fmt.tokens(r.value)} · ${fmt.duration(r.activeMs).text}`)}</div>
+    </div>` : `<div class="card">
       <div class="card-head"><h2>Projects</h2>${pager('projects', projects)}</div>
       <div class="table-area">
         ${projects.rows.length ? `<table class="list"><thead><tr><th>Project</th><th class="r">Sessions</th><th class="r">Tokens</th><th class="r">Last active</th></tr></thead><tbody>
           ${projects.rows.map(p => `<tr><td class="name" title="${esc(p.name)}">${esc(p.name)}</td><td class="r">${p.sessions}</td><td class="r">${fmt.tokens(p.total)}</td><td class="r muted">${fmt.ago(p.lastActive)}</td></tr>`).join('')}
         </tbody></table>` : '<div class="empty">Nothing in this range</div>'}
       </div>
-    </div>`;
+    </div>`}`;
 }
 
 function placeholders() {
@@ -183,12 +189,17 @@ function drawCharts() {
   if (rh && rh.clientWidth) rh.innerHTML = rhythmGrid(rh.clientWidth);
 }
 
+// Offered once another device has shared its usage.
+const sharing = () => Boolean(state.sync?.enabled && state.sync.devices.length);
+const scopeChoice = () => (sharing() ? segmented('scope', SCOPES, state.usage.scope) : '');
+
 export function render() {
   const u = state.usage;
   const accounts = [{ value: 'all', label: 'All' }, ...accountOptions().map(a => ({ value: a.id, label: a.name, dot: a.color }))];
   root.innerHTML = `
-    <div class="page-head"><h1>Usage</h1>${state.usageData ? `<span class="info-tip" data-tip="${tip(`Claude Code and Codex sessions on this PC. Chat conversations aren't stored locally. Updated ${fmt.time(state.usageData.generatedAt, { hour: 'numeric', minute: '2-digit' })}.`)}" aria-label="About this data">${ICONS.info}</span>` : ''}</div>
+    <div class="page-head"><h1>Usage</h1>${state.usageData ? `<span class="info-tip" data-tip="${tip(`${state.usageData.scope === 'all' ? 'Claude Code and Codex sessions on every device you share usage from.' : 'Claude Code and Codex sessions on this PC.'} Chat conversations aren't stored locally. Updated ${fmt.time(state.usageData.generatedAt, { hour: 'numeric', minute: '2-digit' })}.`)}" aria-label="About this data">${ICONS.info}</span>` : ''}</div>
     <div class="filters">
+      ${scopeChoice()}
       ${segmented('account', accounts, u.account)}
       <span class="spacer"></span>
       ${segmented('range', RANGES, u.range)}
@@ -201,7 +212,9 @@ export async function load() {
   loading = true;
   if (!state.usageData) render();
   try {
-    state.usageData = await api.usage({ account: state.usage.account, range: state.usage.range });
+    state.sync = await api.sync.status();
+    if (!sharing()) state.usage.scope = 'device';
+    state.usageData = await api.usage({ scope: state.usage.scope, account: state.usage.account, range: state.usage.range });
   } catch {
     toast('Could not read usage data', { kind: 'error' });
   }
@@ -211,6 +224,7 @@ export async function load() {
 
 export function mount(el) {
   root = el;
+  onSegment(root, 'scope', v => { state.usage.scope = v; state.usage.account = 'all'; state.usageData = null; load(); });
   onSegment(root, 'account', v => { state.usage.account = v; state.usage.projectPage = 0; load(); });
   onSegment(root, 'range', v => { state.usage.range = v; state.usage.projectPage = 0; load(); });
   onSegment(root, 'metric', v => { state.usage.metric = v; render(); });

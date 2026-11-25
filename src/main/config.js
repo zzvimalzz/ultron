@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { LOCAL, ROAMING, findShortcuts, resolveDataDir } = require('./profiles');
 const { PROVIDERS, isInstalled, isLaunchOnly } = require('./targets');
 const { HUB_DIR } = require('../hub/files');
@@ -121,6 +122,11 @@ function createStore(file) {
         config = { theme: 'system', closeOnLaunch: false, userName: '', setupDone: false, accounts: await discoverClaudeAccounts() };
       }
       if (config.version !== VERSION) { migrate(config); save(); }
+      if (!config.deviceId || !config.sync) {
+        config.deviceId ||= crypto.randomUUID();
+        config.sync ||= { enabled: false, url: '', deviceName: '' };
+        save();
+      }
       return config;
     },
     get: () => config,

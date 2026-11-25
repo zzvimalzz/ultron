@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('crypto');
 const { detect, signedIn } = require('../hub/cli');
 
 const REFRESH_MS = 6 * 3600 * 1000;
@@ -29,6 +30,7 @@ function createDetection({ store, version, onChange, onReset }) {
       store.updateAccount(account.id, patch);
       if (modelReset) onReset(account);
     }
+    if (found.email) store.updateAccount(account.id, { emailHash: crypto.createHash('sha256').update(found.email.trim().toLowerCase()).digest('hex') });
     if (found.tier !== 'unknown') store.updateAccount(account.id, { plan: { label: found.plan, tier: found.tier, checkedAt: found.checkedAt } });
   }
 

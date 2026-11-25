@@ -130,7 +130,7 @@ function parseClaudeInit(message) {
     id: m.value, label: m.displayName, description: m.description || '', efforts: m.supportsEffort === false ? [] : m.supportedEffortLevels || [],
   }));
   const models = withDefault(listed.filter(m => m.id !== 'default'), listed.find(m => m.id === 'default'));
-  return { plan, tier: tierOf('claude', plan), models, limits: null };
+  return { plan, email: body.account?.email || null, tier: tierOf('claude', plan), models, limits: null };
 }
 
 // `replies` holds the JSON-RPC results: modelPages (one per model/list page), account and rateLimits.
@@ -142,7 +142,7 @@ function parseCodexReplies({ modelPages = [], account, rateLimits }) {
   }));
   const models = withDefault(listed, listed[Math.max(0, shown.findIndex(m => m.isDefault))]);
   const primary = rateLimits?.rateLimits?.primary;
-  return { plan, tier: tierOf('chatgpt', plan), models, limits: primary ? { usedPercent: primary.usedPercent, resetsAt: primary.resetsAt } : null };
+  return { plan, email: account?.account?.email || null, tier: tierOf('chatgpt', plan), models, limits: primary ? { usedPercent: primary.usedPercent, resetsAt: primary.resetsAt } : null };
 }
 
 async function detectClaude(account) {

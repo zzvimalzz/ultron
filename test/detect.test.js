@@ -28,7 +28,7 @@ test('parseClaudeInit reads the plan and each model with its effort levels', () 
     },
   };
   assert.deepStrictEqual(parseClaudeInit(reply), {
-    plan: 'pro', tier: 'paid', limits: null,
+    plan: 'pro', email: 'someone@example.com', tier: 'paid', limits: null,
     models: [
       { id: '', label: 'Default', description: 'The usual one', efforts: ['low', 'medium'] },
       { id: 'model-big', label: 'Big', description: 'Most capable', efforts: ['low', 'high'] },
@@ -44,10 +44,11 @@ test('parseCodexReplies joins model pages, drops hidden models and reads the fir
       { data: [{ model: 'gpt-a', displayName: 'A', supportedReasoningEfforts: [effort('low'), effort('high')] }, { model: 'gpt-hidden', hidden: true }], nextCursor: 'next' },
       { data: [{ model: 'gpt-b', displayName: 'B', description: 'Fast' }] },
     ],
-    account: { account: { planType: 'free' } },
+    account: { account: { planType: 'free', email: 'someone@example.com' } },
     rateLimits: { rateLimits: { primary: { usedPercent: 11, resetsAt: 1800000000 } } },
   });
   assert.strictEqual(found.plan, 'free');
+  assert.strictEqual(found.email, 'someone@example.com');
   assert.strictEqual(found.tier, 'free');
   assert.deepStrictEqual(found.models.map(m => m.id), ['', 'gpt-a', 'gpt-b']);
   assert.deepStrictEqual(found.models[1].efforts, ['low', 'high']);

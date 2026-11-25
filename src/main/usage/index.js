@@ -4,6 +4,7 @@ const { CLIS } = require('../../hub/cli');
 const { createScanner } = require('./scan');
 const { buildContext, attribute } = require('./attribution');
 const { aggregate } = require('./aggregate');
+const { snapshotRows } = require('./buckets');
 
 const WORKING_MS = 60 * 1000;
 // A turn that hasn't ended is still working through long tool calls, unless it went quiet this long.
@@ -38,6 +39,11 @@ function createUsage(cacheFile) {
     return aggregate(scanner.records(), ctx, accounts, options);
   }
 
+  async function rows(accounts, keyOf) {
+    if (!ctx) await refresh(accounts);
+    return snapshotRows(scanner.records(), ctx, accounts, keyOf);
+  }
+
   // Sessions (and Claude subagents) active within `within` ms, each with its owning account.
   function sessions(accounts, within = ACTIVE_MS) {
     if (!ctx) return [];
@@ -57,7 +63,7 @@ function createUsage(cacheFile) {
     });
   }
 
-  return { refresh, query, sessions, ready: () => Boolean(ctx) };
+  return { refresh, query, rows, sessions, ready: () => Boolean(ctx) };
 }
 
 module.exports = { createUsage };

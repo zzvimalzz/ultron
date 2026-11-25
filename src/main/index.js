@@ -1,7 +1,7 @@
 'use strict';
 const os = require('os');
 const path = require('path');
-const { app, BrowserWindow, ipcMain, nativeTheme, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeTheme, safeStorage, shell, dialog } = require('electron');
 const { createStore, blankAccount } = require('./config');
 const { resolveDataDir, isRunning, profileReady, lastActivityAt } = require('./profiles');
 const { installs, availableTargets, openAccount, openSession, signIn, isLaunchOnly } = require('./targets');
@@ -15,6 +15,7 @@ const { createDetection } = require('./detect');
 const memory = require('../hub/memory');
 const { MEMORY_DIR, recentEvents } = require('../hub/files');
 const { createCurator } = require('./curator');
+const { createSync } = require('./sync');
 
 const LIVE_INTERVAL_MS = 4000;
 const MICA = process.platform === 'win32' && Number(os.release().split('.')[2]) >= 22000;
@@ -31,6 +32,7 @@ let usage;
 let detection;
 let curator;
 let updater;
+let sync;
 
 const vaultDir = () => store.get().memory.dir || MEMORY_DIR;
 const usageAccounts = () => store.get().accounts.map(a => ({ ...a, realDataDir: resolveDataDir(a.dataDir) }));
@@ -160,7 +162,11 @@ function registerIpc() {
   ipcMain.handle('memory:keep', (_e, item, section) => memory.keep(vaultDir(), item, section));
   ipcMain.handle('memory:drop', (_e, item) => memory.drop(vaultDir(), item));
   ipcMain.handle('memory:recent', () => recentEvents(Date.now() - 7 * 24 * 3600 * 1000).filter(e => e.type === 'memory').slice(-40).reverse());
-  ipcMain.handle('usage:query', (_e, options) => usage.query(usageAccounts(), options));
+  ipcMain.handle('usage:query', (_e, options) => (options?.scope === 'all' ? sync.merged(options) : usage.query(usageAccounts(), options)));
+  ipcMain.handle('sync:status', () => sync.view());
+  ipcMain.handle('sync:save', (_e, patch) => sync.save(patch));
+  ipcMain.handle('sync:now', async () => { await sync.syncNow(); return sync.view(); });
+  ipcMain.handle('sync:remove', (_e, id) => sync.remove(id));
   ipcMain.handle('dialog:pickFolder', async () => {
     const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0];
@@ -183,6 +189,17 @@ app.whenReady().then(async () => {
   store = createStore(path.join(app.getPath('userData'), 'config.json'));
   await store.load();
   usage = createUsage(path.join(app.getPath('userData'), 'usage-cache.json'));
+  sync = createSync({
+    store, usage, accounts: usageAccounts, onChange: () => { if (win && !win.isDestroyed()) win.webContents.send('live'); },
+    tokenFile: path.join(app.getPath('userData'), 'sync-token.bin'), cacheFile: path.join(app.getPath('userData'), 'sync-devices.json'),
+    secrets: {
+      encrypt: text => {
+        if (!safeStorage.isEncryptionAvailable()) throw new Error("Secure storage isn't available on this PC");
+        return safeStorage.encryptString(text);
+      },
+      decrypt: bytes => safeStorage.decryptString(bytes),
+    },
+  });
   detection = createDetection({ store, version: app.getVersion(), onReset: account => win?.webContents.send('toast', `${account.name}: model reset to default`), onChange: () => { if (win && !win.isDestroyed()) win.webContents.send('live'); } });
   nativeTheme.themeSource = store.get().theme || 'system';
   nativeTheme.on('updated', applyTheme);
@@ -196,6 +213,7 @@ app.whenReady().then(async () => {
     onChange: () => { if (win && !win.isDestroyed()) win.webContents.send('live'); },
   });
   curator.start();
+  sync.start();
   updater = createUpdater({ onReady: () => win?.webContents.send('update-ready') });
   registerIpc();
   createWindow();
